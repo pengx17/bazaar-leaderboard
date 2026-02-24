@@ -104,9 +104,16 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }
     }
 
+    // Get all seasons that have data
+    const seasonRows = await db
+      .prepare("SELECT DISTINCT season_id FROM snapshots ORDER BY season_id DESC")
+      .all<{ season_id: number }>();
+    const availableSeasons = seasonRows.results.map((r) => r.season_id);
+
     return Response.json(
       {
         seasonId,
+        availableSeasons,
         topPlayer: topPlayer
           ? { username: topPlayer.username, rating: topPlayer.rating }
           : null,

@@ -8,19 +8,13 @@ import { useFetch } from "@/lib/use-fetch";
 export function PlayerPage({ params }: { params: { username: string } }) {
   const username = decodeURIComponent(params.username);
 
-  // Fetch stats to get current season
+  // Fetch stats to get current season and available seasons
   const { data: stats } = useFetch(() => fetchStats(), []);
   const currentSeason = stats?.seasonId;
+  const seasons = stats?.availableSeasons ?? [];
 
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
   const activeSeason = selectedSeason ?? currentSeason;
-
-  // Generate available seasons (current + 2 previous)
-  const seasons = currentSeason
-    ? Array.from({ length: 3 }, (_, i) => currentSeason - i).filter(
-        (s) => s > 0
-      )
-    : [];
 
   // Fetch player's current rank/rating from leaderboard (exact match)
   const { data: playerData } = useFetch(
@@ -75,8 +69,8 @@ export function PlayerPage({ params }: { params: { username: string } }) {
             </span>
           )}
 
-          {/* Season selector */}
-          {seasons.length > 0 && (
+          {/* Season selector — only show when multiple seasons have data */}
+          {seasons.length > 1 && (
             <div className="flex items-center gap-1 ml-auto">
               <span className="text-xs text-muted-foreground font-mono mr-1">
                 Season

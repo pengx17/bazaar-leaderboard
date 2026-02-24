@@ -2,6 +2,7 @@ const API_BASE = "/api";
 
 export interface StatsData {
   seasonId: number;
+  availableSeasons: number[];
   topPlayer: { username: string; rating: number } | null;
   bottomPlayer: { username: string; rating: number } | null;
   totalEntries: number;
