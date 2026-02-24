@@ -1,0 +1,10 @@
+name = "bazaar-leaderboard"
+compatibility_date = "2025-02-24"
+pages_build_output_dir = "dist"
+
+# account_id passed via CLOUDFLARE_ACCOUNT_ID env var (Pages doesn't support it in config)
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bazaar-leaderboard"
+database_id = "0d26e1f3-d0ee-41f5-bd8b-f1f04b72fa99"

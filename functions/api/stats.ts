@@ -1,0 +1,118 @@
+interface Env {
+  DB: D1Database;
+}
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export const onRequestOptions: PagesFunction<Env> = async () => {
+  return new Response(null, { status: 204, headers: corsHeaders });
+};
+
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const db = context.env.DB;
+  const url = new URL(context.request.url);
+  const seasonId = Number(url.searchParams.get("seasonId") ?? 5);
+
+  try {
+    // Get the latest snapshot for this season
+    const latestSnapshot = await db
+      .prepare(
+        `SELECT id, fetched_at, total_entries
+         FROM snapshots
+         WHERE season_id = ?
+         ORDER BY fetched_at DESC
+         LIMIT 1`
+      )
+      .bind(seasonId)
+      .first<{ id: number; fetched_at: string; total_entries: number }>();
+
+    if (!latestSnapshot) {
+      return Response.json(
+        { error: "No snapshots found for this season" },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    // Get top player (position = 1) from latest snapshot
+    const topPlayer = await db
+      .prepare(
+        `SELECT username, rating
+         FROM entries
+         WHERE snapshot_id = ? AND position = 1`
+      )
+      .bind(latestSnapshot.id)
+      .first<{ username: string; rating: number }>();
+
+    // Get bottom player (max position) from latest snapshot
+    const bottomPlayer = await db
+      .prepare(
+        `SELECT username, rating, position
+         FROM entries
+         WHERE snapshot_id = ?
+         ORDER BY position DESC
+         LIMIT 1`
+      )
+      .bind(latestSnapshot.id)
+      .first<{ username: string; rating: number; position: number }>();
+
+    // Daily change: compare top player's current rating vs ~24h ago
+    let dailyTopChange: number | null = null;
+
+    if (topPlayer) {
+      const oneDayAgo = new Date(
+        new Date(latestSnapshot.fetched_at).getTime() - 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      // Find the snapshot closest to 24h ago
+      const oldSnapshot = await db
+        .prepare(
+          `SELECT id FROM snapshots
+           WHERE season_id = ? AND fetched_at <= ?
+           ORDER BY fetched_at DESC
+           LIMIT 1`
+        )
+        .bind(seasonId, oneDayAgo)
+        .first<{ id: number }>();
+
+      if (oldSnapshot) {
+        // Look up the same user's rating in that older snapshot
+        const oldEntry = await db
+          .prepare(
+            `SELECT rating FROM entries
+             WHERE snapshot_id = ? AND username = ?`
+          )
+          .bind(oldSnapshot.id, topPlayer.username)
+          .first<{ rating: number }>();
+
+        if (oldEntry) {
+          dailyTopChange = topPlayer.rating - oldEntry.rating;
+        }
+      }
+    }
+
+    return Response.json(
+      {
+        topPlayer: topPlayer
+          ? { username: topPlayer.username, rating: topPlayer.rating }
+          : null,
+        bottomPlayer: bottomPlayer
+          ? { username: bottomPlayer.username, rating: bottomPlayer.rating }
+          : null,
+        totalEntries: latestSnapshot.total_entries,
+        dailyTopChange,
+        snapshotTime: latestSnapshot.fetched_at,
+      },
+      { headers: corsHeaders }
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return Response.json(
+      { error: message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+};
