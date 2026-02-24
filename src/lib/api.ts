@@ -22,6 +22,34 @@ export interface TitleRatingHistoryPoint {
   top1000: number | null;
 }
 
+export interface LeaderboardEntry {
+  position: number;
+  username: string;
+  rating: number;
+}
+
+export interface LeaderboardData {
+  seasonId: number;
+  total: number;
+  entries: LeaderboardEntry[];
+}
+
+export async function fetchLeaderboard(opts: {
+  seasonId?: number;
+  limit?: number;
+  offset?: number;
+  search?: string;
+}): Promise<LeaderboardData> {
+  const params = new URLSearchParams();
+  if (opts.seasonId != null) params.set("seasonId", String(opts.seasonId));
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  if (opts.offset != null) params.set("offset", String(opts.offset));
+  if (opts.search) params.set("search", opts.search);
+  const res = await fetch(`${API_BASE}/leaderboard?${params}`);
+  if (!res.ok) throw new Error(`Failed to fetch leaderboard: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchStats(seasonId?: number): Promise<StatsData> {
   const params = seasonId != null ? `?seasonId=${seasonId}` : "";
   const res = await fetch(`${API_BASE}/stats${params}`);
