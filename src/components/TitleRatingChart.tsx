@@ -3,18 +3,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { fetchTitleRatingHistory } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
-interface TitleRatingChartProps {
-  seasonId: number;
-  days?: number;
-}
-
-export function TitleRatingChart({
-  seasonId,
-  days = 7,
-}: TitleRatingChartProps) {
+export function TitleRatingChart({ seasonId }: { seasonId: number }) {
   const { data, loading, error } = useFetch(
-    () => fetchTitleRatingHistory(seasonId, days),
-    [seasonId, days]
+    () => fetchTitleRatingHistory(seasonId),
+    [seasonId]
   );
 
   if (loading) {
@@ -181,7 +173,7 @@ export function TitleRatingChart({
             Title Cutoff Lines
           </h3>
           <p className="text-xs text-muted-foreground/60 mt-1">
-            Minimum rating to reach each title tier — last {days} days
+            Minimum rating to reach each title tier this season
           </p>
         </div>
         <ReactECharts
