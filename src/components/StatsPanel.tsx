@@ -1,40 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Crown, Users, Minus } from "lucide-react";
-import { fetchStats } from "@/lib/api";
-import { useFetch } from "@/lib/use-fetch";
+import type { StatsData } from "@/lib/api";
 
-export function StatsPanel({ seasonId }: { seasonId: number }) {
-  const { data: stats, loading, error } = useFetch(
-    () => fetchStats(seasonId),
-    [seasonId]
-  );
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i} className="stat-card animate-pulse">
-            <CardContent className="p-5">
-              <div className="h-4 bg-white/5 rounded w-24 mb-3" />
-              <div className="h-8 bg-white/5 rounded w-32" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  if (error || !stats) {
-    return (
-      <Card className="stat-card">
-        <CardContent className="p-5 text-center text-muted-foreground">
-          {error ?? "No data available"}
-        </CardContent>
-      </Card>
-    );
-  }
-
+export function StatsPanel({ stats }: { stats: StatsData }) {
   const snapshotDate = new Date(stats.snapshotTime);
   const timeAgo = getTimeAgo(snapshotDate);
 

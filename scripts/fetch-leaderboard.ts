@@ -53,10 +53,15 @@ interface D1Statement {
 const CF_API_TOKEN = requireEnv("CLOUDFLARE_API_TOKEN");
 const CF_ACCOUNT_ID = requireEnv("CLOUDFLARE_ACCOUNT_ID");
 const D1_DATABASE_ID = requireEnv("D1_DATABASE_ID");
-const SEASON_ID = Number(process.env.SEASON_ID || "12");
+const SEASON_ID_OVERRIDE = process.env.SEASON_ID
+  ? Number(process.env.SEASON_ID)
+  : null;
 
 const D1_API_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
 const GAME_API_BASE = "https://playthebazaar.com/api";
+
+/** Number of recent seasons to keep in the database. */
+const KEEP_SEASONS = 3;
 
 /** Refresh the access token if it expires within this many minutes. */
 const TOKEN_REFRESH_THRESHOLD_MINUTES = 10;
@@ -326,33 +331,106 @@ async function storeEntries(
 }
 
 // ---------------------------------------------------------------------------
+// Season detection
+// ---------------------------------------------------------------------------
+
+async function getKnownMaxSeason(): Promise<number> {
+  const resp = await queryD1<{ max_season: number | null }>({
+    sql: "SELECT MAX(season_id) as max_season FROM snapshots",
+  });
+  return resp.result[0]?.results[0]?.max_season ?? 1;
+}
+
+async function detectLatestSeason(accessToken: string): Promise<number> {
+  log("Auto-detecting latest season...");
+
+  let seasonId = await getKnownMaxSeason();
+  log(`Last known season in DB: ${seasonId}`);
+
+  // Probe upward: if current season has entries, try the next one
+  while (true) {
+    const probe = await fetchLeaderboard(accessToken, seasonId + 1);
+    if (probe.totalEntries > 0) {
+      seasonId = seasonId + 1;
+      log(`Season ${seasonId} has ${probe.totalEntries} entries, trying next...`);
+    } else {
+      break;
+    }
+  }
+
+  log(`Latest season detected: ${seasonId}`);
+  return seasonId;
+}
+
+// ---------------------------------------------------------------------------
+// Cleanup old seasons
+// ---------------------------------------------------------------------------
+
+async function cleanupOldSeasons(): Promise<void> {
+  const resp = await queryD1<{ season_id: number }>({
+    sql: "SELECT DISTINCT season_id FROM snapshots ORDER BY season_id DESC",
+  });
+
+  const allSeasons = resp.result[0]?.results.map((r) => r.season_id) ?? [];
+
+  if (allSeasons.length <= KEEP_SEASONS) {
+    log(`Only ${allSeasons.length} season(s) in DB, no cleanup needed.`);
+    return;
+  }
+
+  const seasonsToDelete = allSeasons.slice(KEEP_SEASONS);
+  log(`Cleaning up old seasons: ${seasonsToDelete.join(", ")}`);
+
+  const placeholders = seasonsToDelete.map(() => "?").join(", ");
+
+  // Delete entries first (FK reference), then snapshots
+  await queryD1({
+    sql: `DELETE FROM entries WHERE snapshot_id IN (SELECT id FROM snapshots WHERE season_id IN (${placeholders}))`,
+    params: seasonsToDelete,
+  });
+  await queryD1({
+    sql: `DELETE FROM snapshots WHERE season_id IN (${placeholders})`,
+    params: seasonsToDelete,
+  });
+
+  log(`Deleted data for season(s): ${seasonsToDelete.join(", ")}`);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   log("=== Bazaar Leaderboard Fetch Start ===");
-  log(`Season ID: ${SEASON_ID}`);
 
   // 1. Get a valid access token (refresh if needed)
   const accessToken = await ensureValidToken();
 
-  // 2. Fetch leaderboard
-  const leaderboard = await fetchLeaderboard(accessToken, SEASON_ID);
+  // 2. Determine which season to fetch
+  const seasonId =
+    SEASON_ID_OVERRIDE ?? (await detectLatestSeason(accessToken));
+  log(`Using season ID: ${seasonId}`);
+
+  // 3. Fetch leaderboard
+  const leaderboard = await fetchLeaderboard(accessToken, seasonId);
 
   if (leaderboard.entries.length === 0) {
     log("No entries returned from leaderboard API. Skipping storage.");
     return;
   }
 
-  // 3. Store in D1
+  // 4. Store in D1
   const fetchedAt = new Date().toISOString();
   const snapshotId = await createSnapshot(
-    SEASON_ID,
+    seasonId,
     leaderboard.totalEntries,
     fetchedAt
   );
 
   await storeEntries(snapshotId, leaderboard.entries);
+
+  // 5. Cleanup old seasons
+  await cleanupOldSeasons();
 
   log("=== Bazaar Leaderboard Fetch Complete ===");
 }

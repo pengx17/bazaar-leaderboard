@@ -16,7 +16,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const db = context.env.DB;
   const url = new URL(context.request.url);
   const username = url.searchParams.get("username");
-  const seasonId = Number(url.searchParams.get("seasonId") ?? 5);
+  const seasonIdParam = url.searchParams.get("seasonId");
+    let seasonId: number;
+
+    if (seasonIdParam) {
+      seasonId = Number(seasonIdParam);
+    } else {
+      const latest = await db
+        .prepare("SELECT MAX(season_id) as latest FROM snapshots")
+        .first<{ latest: number | null }>();
+      seasonId = latest?.latest ?? 1;
+    }
 
   if (!username) {
     return Response.json(

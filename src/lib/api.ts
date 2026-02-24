@@ -1,6 +1,7 @@
 const API_BASE = "/api";
 
 export interface StatsData {
+  seasonId: number;
   topPlayer: { username: string; rating: number } | null;
   bottomPlayer: { username: string; rating: number } | null;
   totalEntries: number;
@@ -21,15 +22,16 @@ export interface TitleRatingHistoryPoint {
   top1000: number | null;
 }
 
-export async function fetchStats(seasonId = 5): Promise<StatsData> {
-  const res = await fetch(`${API_BASE}/stats?seasonId=${seasonId}`);
+export async function fetchStats(seasonId?: number): Promise<StatsData> {
+  const params = seasonId != null ? `?seasonId=${seasonId}` : "";
+  const res = await fetch(`${API_BASE}/stats${params}`);
   if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status}`);
   return res.json();
 }
 
 export async function fetchRatingHistory(
   username: string,
-  seasonId = 5
+  seasonId: number
 ): Promise<RatingHistoryPoint[]> {
   const res = await fetch(
     `${API_BASE}/rating-history?username=${encodeURIComponent(username)}&seasonId=${seasonId}`
@@ -40,7 +42,7 @@ export async function fetchRatingHistory(
 }
 
 export async function fetchTitleRatingHistory(
-  seasonId = 5,
+  seasonId: number,
   days = 7
 ): Promise<TitleRatingHistoryPoint[]> {
   const res = await fetch(
