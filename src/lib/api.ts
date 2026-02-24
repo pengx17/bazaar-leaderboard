@@ -70,11 +70,10 @@ export async function fetchRatingHistory(
 }
 
 export async function fetchTitleRatingHistory(
-  seasonId: number,
-  days = 7
+  seasonId: number
 ): Promise<TitleRatingHistoryPoint[]> {
   const res = await fetch(
-    `${API_BASE}/title-rating-history?seasonId=${seasonId}&days=${days}`
+    `${API_BASE}/title-rating-history?seasonId=${seasonId}`
   );
   if (!res.ok)
     throw new Error(`Failed to fetch title rating history: ${res.status}`);

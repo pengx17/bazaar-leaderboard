@@ -26,17 +26,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         .first<{ latest: number | null }>();
       seasonId = latest?.latest ?? 1;
     }
-  const days = Number(url.searchParams.get("days") ?? 7);
-
-  const cutoff = new Date(
-    Date.now() - days * 24 * 60 * 60 * 1000
-  ).toISOString();
-
   try {
-    // For each snapshot in the date range, get the rating at the boundary
-    // positions (10th, 100th, 1000th). The boundary player is the one with
-    // the highest position number <= N, which has the minimum rating among
-    // the top-N players.
+    // For each snapshot in the season, get the rating at the boundary
+    // positions (10th, 100th, 1000th). Returns the full season history.
     const results = await db
       .prepare(
         `SELECT
@@ -48,10 +40,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
            (SELECT MIN(e.rating) FROM entries e
             WHERE e.snapshot_id = s.id AND e.position <= 1000) AS top1000
          FROM snapshots s
-         WHERE s.season_id = ? AND s.fetched_at >= ?
+         WHERE s.season_id = ?
          ORDER BY s.fetched_at ASC`
       )
-      .bind(seasonId, cutoff)
+      .bind(seasonId)
       .all<{
         time: string;
         top10: number | null;
