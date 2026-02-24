@@ -1,16 +1,35 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { Search, ChevronLeft, ChevronRight, Trophy } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Trophy, X } from "lucide-react";
 import { fetchLeaderboard } from "@/lib/api";
 import type { LeaderboardEntry } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
 const PAGE_SIZE = 50;
+const DEBOUNCE_MS = 300;
+
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
 
 export function LeaderboardTable({ seasonId }: { seasonId: number }) {
   const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebouncedValue(searchInput.trim(), DEBOUNCE_MS);
+  const prevSearchRef = useRef(debouncedSearch);
+
+  // Reset page to 0 when search term changes
+  useEffect(() => {
+    if (prevSearchRef.current !== debouncedSearch) {
+      prevSearchRef.current = debouncedSearch;
+      setPage(0);
+    }
+  }, [debouncedSearch]);
 
   const { data, loading, error } = useFetch(
     () =>
@@ -18,58 +37,39 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
         seasonId,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
       }),
-    [seasonId, page, search]
+    [seasonId, page, debouncedSearch]
   );
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
 
-  const handleSearch = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      setSearch(searchInput);
-      setPage(0);
-    },
-    [searchInput]
-  );
-
   const handleClearSearch = useCallback(() => {
     setSearchInput("");
-    setSearch("");
     setPage(0);
   }, []);
 
   return (
     <div className="space-y-4">
       {/* Search */}
-      <form onSubmit={handleSearch} className="relative">
+      <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           type="text"
           placeholder="Search player..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          className="w-full pl-10 pr-20 py-2.5 bg-card/50 border border-border/40 rounded-lg text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-colors"
+          className="w-full pl-10 pr-10 py-2.5 bg-card/50 border border-border/40 rounded-lg text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-colors"
         />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-          {search && (
-            <button
-              type="button"
-              onClick={handleClearSearch}
-              className="px-2 py-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Clear
-            </button>
-          )}
+        {searchInput && (
           <button
-            type="submit"
-            className="px-3 py-1 text-xs font-mono bg-amber-500/10 text-amber-500 rounded hover:bg-amber-500/20 transition-colors"
+            onClick={handleClearSearch}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
           >
-            Search
+            <X className="w-4 h-4" />
           </button>
-        </div>
-      </form>
+        )}
+      </div>
 
       {/* Table */}
       <div className="rounded-lg border border-border/40 overflow-hidden">
@@ -100,8 +100,8 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
           </div>
         ) : !data || data.entries.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground font-mono">
-            {search
-              ? `No players found for "${search}"`
+            {debouncedSearch
+              ? `No players found for "${debouncedSearch}"`
               : "No leaderboard data"}
           </div>
         ) : (
@@ -117,7 +117,7 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-mono text-muted-foreground tabular-nums">
-            {search
+            {debouncedSearch
               ? `${data?.total.toLocaleString()} results`
               : `${(page * PAGE_SIZE + 1).toLocaleString()}–${Math.min((page + 1) * PAGE_SIZE, data?.total ?? 0).toLocaleString()} of ${data?.total.toLocaleString()}`}
           </span>
