@@ -53,7 +53,7 @@ interface D1Statement {
 const CF_API_TOKEN = requireEnv("CLOUDFLARE_API_TOKEN");
 const CF_ACCOUNT_ID = requireEnv("CLOUDFLARE_ACCOUNT_ID");
 const D1_DATABASE_ID = requireEnv("D1_DATABASE_ID");
-const SEASON_ID = Number(process.env.SEASON_ID ?? "12");
+const SEASON_ID = Number(process.env.SEASON_ID || "12");
 
 const D1_API_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
 const GAME_API_BASE = "https://playthebazaar.com/api";
