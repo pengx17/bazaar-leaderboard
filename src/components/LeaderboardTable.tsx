@@ -241,16 +241,20 @@ function LeaderboardRow({
   return (
     <Link
       href={`/player/${encodeURIComponent(entry.username)}`}
-      className={`grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-2.5 transition-colors cursor-pointer group ${
+      className={`grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-baseline px-4 py-2.5 transition-colors cursor-pointer group ${
         pinned
           ? "hover:bg-amber-500/[0.06]"
           : "hover:bg-amber-500/[0.04]"
       }`}
     >
       {/* Rank */}
-      <span className="flex items-center gap-1 font-mono text-sm font-medium tabular-nums text-foreground/70">
+      <span className="font-mono text-sm font-medium tabular-nums text-foreground/70 leading-tight">
         {entry.position}
-        <ChangeIndicator value={entry.positionChange} />
+        {entry.positionChange != null && entry.positionChange !== 0 && (
+          <span className="block">
+            <ChangeIndicator value={entry.positionChange} />
+          </span>
+        )}
       </span>
 
       {/* Player name */}
@@ -259,9 +263,13 @@ function LeaderboardRow({
       </span>
 
       {/* Rating */}
-      <span className="text-right flex items-center justify-end gap-1 font-mono text-sm font-medium tabular-nums text-foreground/70">
+      <span className="text-right font-mono text-sm font-medium tabular-nums text-foreground/70 leading-tight">
         {entry.rating.toLocaleString()}
-        <ChangeIndicator value={entry.ratingChange} />
+        {entry.ratingChange != null && entry.ratingChange !== 0 && (
+          <span className="block">
+            <ChangeIndicator value={entry.ratingChange} />
+          </span>
+        )}
       </span>
 
       {/* Pin */}
