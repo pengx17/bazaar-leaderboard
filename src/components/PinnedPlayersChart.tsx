@@ -9,6 +9,7 @@ import { usePinnedPlayers } from "@/lib/pinned-players";
 import { PinButton } from "@/components/PinButton";
 import { useTheme } from "@/lib/theme";
 import { getChartTheme } from "@/lib/chart-theme";
+import { buildUniformTimeline, indexByTime, forwardFillSeries } from "@/lib/time-series";
 
 const PLAYER_COLORS = [
   "#f59e0b", // amber
@@ -115,30 +116,25 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
     );
   }
 
-  // Collect all unique times across all players for the x-axis
-  const timeSet = new Set<string>();
-  for (const p of state.players) {
-    for (const h of p.history) timeSet.add(h.time);
-  }
-  const times = [...timeSet].sort();
+  // Build unified 30-min timeline across all players
+  const allTimes = state.players.flatMap((p) => p.history.map((h) => h.time));
+  const timeline = buildUniformTimeline(allTimes);
 
-  // Build series: for each player, map values to the unified time axis
+  // Build series with forward-fill on the unified timeline
   const isRank = metric === "rank";
   const allValues: number[] = [];
   const series = state.players.map((p, i) => {
-    const valueByTime = new Map(
-      p.history.map((h) => [h.time, isRank ? h.position : h.rating])
-    );
+    const rawTimes = p.history.map((h) => h.time);
+    const rawValues = p.history.map((h) => (isRank ? h.position : h.rating));
+    const filled = forwardFillSeries(timeline, indexByTime(rawTimes, rawValues));
     const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
-    const data = times.map((t) => valueByTime.get(t) ?? null);
-    for (const v of data) if (v != null) allValues.push(v);
+    for (const [, v] of filled) if (v != null) allValues.push(v);
     return {
       name: p.username,
       type: "line" as const,
-      data,
+      data: filled,
       smooth: true,
       symbol: "none",
-      connectNulls: true,
       lineStyle: { color, width: 2 },
     };
   });
@@ -162,16 +158,15 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
       formatter: (
         params: Array<{
           seriesName: string;
-          value: number | null;
-          axisValueLabel: string;
+          value: [number, number | null];
           color: string;
         }>
       ) => {
-        const time = new Date(params[0].axisValueLabel).toLocaleString();
+        const time = new Date(params[0].value[0]).toLocaleString();
         let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
         for (const p of params) {
-          if (p.value == null) continue;
-          const display = isRank ? `#${p.value.toLocaleString()}` : p.value.toLocaleString();
+          if (p.value[1] == null) continue;
+          const display = isRank ? `#${p.value[1].toLocaleString()}` : p.value[1].toLocaleString();
           html += `<div style="display:flex;align-items:center;gap:6px">
             <span style="width:8px;height:2px;background:${p.color}"></span>
             <span>${p.seriesName}:</span>
@@ -200,13 +195,12 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
       bottom: 30,
     },
     xAxis: {
-      type: "category" as const,
-      data: times,
+      type: "time" as const,
       axisLabel: {
         color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 10,
-        formatter: (value: string) => {
+        formatter: (value: number) => {
           const d = new Date(value);
           return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
         },

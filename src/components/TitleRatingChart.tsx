@@ -5,6 +5,7 @@ import { fetchTitleRatingHistory } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { useTheme } from "@/lib/theme";
 import { getChartTheme } from "@/lib/chart-theme";
+import { buildUniformTimeline, indexByTime, forwardFillSeries } from "@/lib/time-series";
 
 export function TitleRatingChart({ seasonId }: { seasonId: number }) {
   const { t } = useTranslation();
@@ -47,19 +48,22 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
     );
   }
 
-  // Forward-fill: carry last known value when a field is null
-  const filled = data.reduce<typeof data>((acc, d) => {
-    const prev = acc.length > 0 ? acc[acc.length - 1] : null;
-    acc.push({
-      time: d.time,
-      top10: d.top10 ?? prev?.top10 ?? null,
-      top100: d.top100 ?? prev?.top100 ?? null,
-      top1000: d.top1000 ?? prev?.top1000 ?? null,
-    });
-    return acc;
-  }, []);
+  // Build uniform 30-min timeline and forward-fill each tier
+  const rawTimes = data.map((d) => d.time);
+  const timeline = buildUniformTimeline(rawTimes);
 
-  const times = filled.map((d) => d.time);
+  const top10Data = forwardFillSeries(
+    timeline,
+    indexByTime(rawTimes, data.map((d) => d.top10 as number))
+  );
+  const top100Data = forwardFillSeries(
+    timeline,
+    indexByTime(rawTimes, data.map((d) => d.top100 as number))
+  );
+  const top1000Data = forwardFillSeries(
+    timeline,
+    indexByTime(rawTimes, data.map((d) => d.top1000 as number))
+  );
 
   const lineColors = {
     top10: "#f59e0b",
@@ -78,15 +82,15 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 12,
       },
-      formatter: (params: Array<{ seriesName: string; value: number | null; axisValueLabel: string; color: string }>) => {
-        const time = new Date(params[0].axisValueLabel).toLocaleString();
+      formatter: (params: Array<{ seriesName: string; value: [number, number | null]; color: string }>) => {
+        const time = new Date(params[0].value[0]).toLocaleString();
         let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
         for (const p of params) {
-          if (p.value == null) continue;
+          if (p.value[1] == null) continue;
           html += `<div style="display:flex;align-items:center;gap:6px">
             <span style="width:8px;height:2px;background:${p.color}"></span>
             <span>${p.seriesName}:</span>
-            <strong>${p.value.toLocaleString()}</strong>
+            <strong>${p.value[1].toLocaleString()}</strong>
           </div>`;
         }
         return html;
@@ -111,13 +115,12 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       bottom: 30,
     },
     xAxis: {
-      type: "category" as const,
-      data: times,
+      type: "time" as const,
       axisLabel: {
         color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 10,
-        formatter: (value: string) => {
+        formatter: (value: number) => {
           const d = new Date(value);
           return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
         },
@@ -146,7 +149,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       {
         name: t("titleChart.top10"),
         type: "line",
-        data: filled.map((d) => d.top10),
+        data: top10Data,
         smooth: true,
         symbol: "none",
         lineStyle: { color: lineColors.top10, width: 2 },
@@ -167,7 +170,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       {
         name: t("titleChart.top100"),
         type: "line",
-        data: filled.map((d) => d.top100),
+        data: top100Data,
         smooth: true,
         symbol: "none",
         lineStyle: { color: lineColors.top100, width: 2 },
@@ -175,7 +178,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       {
         name: t("titleChart.top1000"),
         type: "line",
-        data: filled.map((d) => d.top1000),
+        data: top1000Data,
         smooth: true,
         symbol: "none",
         lineStyle: { color: lineColors.top1000, width: 2 },

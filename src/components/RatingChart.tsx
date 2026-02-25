@@ -5,6 +5,7 @@ import { fetchRatingHistory } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { useTheme } from "@/lib/theme";
 import { getChartTheme } from "@/lib/chart-theme";
+import { buildUniformTimeline, indexByTime, forwardFillSeries } from "@/lib/time-series";
 
 interface RatingChartProps {
   username: string;
@@ -53,17 +54,20 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
     );
   }
 
-  const times = data.map((d) => d.time);
-  const ratings = data.map((d) => d.rating);
-  const positions = data.map((d) => d.position);
+  const rawTimes = data.map((d) => d.time);
+  const timeline = buildUniformTimeline(rawTimes);
+  const ratingData = forwardFillSeries(timeline, indexByTime(rawTimes, data.map((d) => d.rating)));
+  const positionData = forwardFillSeries(timeline, indexByTime(rawTimes, data.map((d) => d.position)));
 
-  // Compute axis ranges with ~10% padding to compress the view
-  const ratingMin = Math.min(...ratings);
-  const ratingMax = Math.max(...ratings);
+  // Compute axis ranges with ~10% padding
+  const ratingVals = ratingData.map((d) => d[1]).filter((v): v is number => v != null);
+  const ratingMin = Math.min(...ratingVals);
+  const ratingMax = Math.max(...ratingVals);
   const ratingPad = Math.max(Math.round((ratingMax - ratingMin) * 0.1), 5);
 
-  const posMin = Math.min(...positions);
-  const posMax = Math.max(...positions);
+  const posVals = positionData.map((d) => d[1]).filter((v): v is number => v != null);
+  const posMin = Math.min(...posVals);
+  const posMax = Math.max(...posVals);
   const posPad = Math.max(Math.round((posMax - posMin) * 0.1), 1);
 
   const option = {
@@ -77,15 +81,16 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 12,
       },
-      formatter: (params: Array<{ seriesName: string; value: number; axisValueLabel: string }>) => {
-        const time = new Date(params[0].axisValueLabel).toLocaleString();
+      formatter: (params: Array<{ seriesName: string; value: [number, number]; axisValueLabel: string }>) => {
+        const time = new Date(params[0].value[0]).toLocaleString();
         let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
         for (const p of params) {
+          if (p.value[1] == null) continue;
           const color = p.seriesName === t("chart.rating") ? ct.ratingAxis : ct.positionAxis;
           html += `<div style="display:flex;align-items:center;gap:6px">
             <span style="width:8px;height:8px;border-radius:50%;background:${color}"></span>
             <span>${p.seriesName}:</span>
-            <strong>${p.value.toLocaleString()}</strong>
+            <strong>${p.value[1].toLocaleString()}</strong>
           </div>`;
         }
         return html;
@@ -98,13 +103,12 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       bottom: 30,
     },
     xAxis: {
-      type: "category" as const,
-      data: times,
+      type: "time" as const,
       axisLabel: {
         color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 10,
-        formatter: (value: string) => {
+        formatter: (value: number) => {
           const d = new Date(value);
           return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
         },
@@ -155,7 +159,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       {
         name: t("chart.rating"),
         type: "line",
-        data: ratings,
+        data: ratingData,
         yAxisIndex: 0,
         smooth: true,
         symbol: "none",
@@ -180,7 +184,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       {
         name: t("chart.position"),
         type: "line",
-        data: positions,
+        data: positionData,
         yAxisIndex: 1,
         smooth: true,
         symbol: "none",
