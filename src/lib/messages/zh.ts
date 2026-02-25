@@ -57,28 +57,32 @@ export default {
   "pin.maxReached": "最多关注 {{max}} 名玩家",
 
   // RatingPrediction
-  "prediction.heading": "前 1000 预测",
-  "prediction.alreadyIn": "已进入前 1000！",
+  "prediction.heading": "排名预测",
+  "prediction.tier.top10": "前 10",
+  "prediction.tier.top100": "前 100",
+  "prediction.tier.top1000": "前 1000",
+  "prediction.elite": "你已跻身前 10 的顶尖玩家行列！",
   "prediction.currentRank": "当前排名：第 {{rank}} 名",
   "prediction.ratingGap": "分差",
-  "prediction.target": "目标：{{target}}",
+  "prediction.target": "{{tier}}目标：{{target}}",
   "prediction.avgWins": "场均胜场",
   "prediction.tenWinRate": "10 胜率：{{rate}}%",
   "prediction.estGames": "预计还需场次",
+  "prediction.estGamesSub": "达到{{tier}}",
   "prediction.equilibrium": "均衡分数",
   "prediction.equilibriumSub": "当前实力对应的分数上限",
   "prediction.needAvgWins": "所需场均胜场",
   "prediction.needAvgWinsSub": "维持目标分数所需",
   "prediction.stallWarning":
-    "按当前胜率，分数将停滞在 {{rating}} 附近 — 需要更高的场均胜场才能进入前 1000。",
+    "按当前胜率，分数将停滞在 {{rating}} 附近 — 需要更高的场均胜场才能进入{{tier}}。",
   "prediction.formula": "ΔR = 5(W − R/100)",
   "prediction.formula10win": "10 胜 +5",
   "prediction.basedOn": "基于 {{count}} 场对局数据。",
-  "prediction.assumesThreshold": "假设前 1000 门槛保持在 {{threshold}}。",
+  "prediction.assumesThreshold": "假设{{tier}}门槛保持在 {{threshold}}。",
 
   "prediction.noHistory":
     "需要至少 2 个分数快照才能预测。数据每 30 分钟采集一次，请稍后再看。",
-  "prediction.noThreshold": "本赛季的前 1000 门槛数据暂不可用。",
+  "prediction.noThreshold": "本赛季的段位门槛数据暂不可用。",
 
   // ThemeToggle
   "theme.switchToLight": "切换到亮色模式",

@@ -2,7 +2,7 @@ import { Target } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchRatingHistory, fetchTitleRatingHistory } from "@/lib/api";
-import type { RatingHistoryPoint } from "@/lib/api";
+import type { RatingHistoryPoint, TitleRatingHistoryPoint } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
 /**
@@ -32,6 +32,8 @@ interface PredictionResult {
   tenWinRate: number;
 }
 
+type Tier = "top10" | "top100" | "top1000";
+
 function extractGameSessions(history: RatingHistoryPoint[]): GameSession[] {
   const sessions: GameSession[] = [];
   for (let i = 1; i < history.length; i++) {
@@ -49,7 +51,7 @@ function extractGameSessions(history: RatingHistoryPoint[]): GameSession[] {
 
 function computePrediction(
   history: RatingHistoryPoint[],
-  top1000Rating: number
+  targetRating: number
 ): PredictionResult | null {
   if (history.length < 2) return null;
 
@@ -57,8 +59,7 @@ function computePrediction(
   const sessions = extractGameSessions(history);
   if (sessions.length === 0) return null;
 
-  // Use the most recent 30 sessions to reflect current skill level,
-  // rather than a rating threshold which mixes in older, weaker play.
+  // Use the most recent 30 sessions to reflect current skill level
   const RECENT_COUNT = 30;
   const gameSessions =
     sessions.length > RECENT_COUNT
@@ -71,35 +72,32 @@ function computePrediction(
     gameSessions.filter((g) => g.is10Win).length / gameSessions.length;
 
   // Equilibrium: E[ΔR] = 0 when 5(avgW − R/100) + 5·p10 = 0
-  // => R_eq = 100·avgW + 100·p10
   const equilibriumRating = Math.round(100 * avgWins + 100 * tenWinRate);
 
-  const ratingGap = Math.max(0, top1000Rating - latest.rating);
+  const ratingGap = Math.max(0, targetRating - latest.rating);
 
   // Simulate from current rating using per-game W distribution
   let estimatedGames: number | null = null;
-  if (latest.position <= 1000 || ratingGap === 0) {
+  if (ratingGap === 0) {
     estimatedGames = 0;
   } else {
     let r = latest.rating;
     let games = 0;
     const maxGames = 2000;
-    while (r < top1000Rating && games < maxGames) {
-      // Expected ΔR using the actual W distribution
+    while (r < targetRating && games < maxGames) {
       let totalDr = 0;
       for (const g of gameSessions) {
         totalDr += 5 * (g.wins - r / 100) + (g.is10Win ? 5 : 0);
       }
       const expectedDr = totalDr / gameSessions.length;
       if (expectedDr <= 0.05) {
-        // Rating stalls before reaching target
         estimatedGames = null;
         break;
       }
       r += expectedDr;
       games++;
     }
-    if (r >= top1000Rating) {
+    if (r >= targetRating) {
       estimatedGames = games;
     }
   }
@@ -107,7 +105,7 @@ function computePrediction(
   return {
     currentRating: latest.rating,
     currentPosition: latest.position,
-    targetRating: top1000Rating,
+    targetRating,
     ratingGap,
     equilibriumRating,
     estimatedGames,
@@ -115,6 +113,20 @@ function computePrediction(
     avgWins,
     tenWinRate,
   };
+}
+
+function getNextTier(position: number): Tier | null {
+  if (position > 1000) return "top1000";
+  if (position > 100) return "top100";
+  if (position > 10) return "top10";
+  return null; // already top 10
+}
+
+function getTierThreshold(
+  tier: Tier,
+  titleData: TitleRatingHistoryPoint
+): number | null {
+  return titleData[tier];
 }
 
 export function RatingPrediction({
@@ -148,13 +160,28 @@ export function RatingPrediction({
   const latestTitle = insufficientHistory
     ? null
     : titleHistory[titleHistory.length - 1];
-  const noThreshold = !insufficientHistory && !latestTitle?.top1000;
+
+  // Determine player position from history
+  const currentPosition = history?.length
+    ? history[history.length - 1].position
+    : null;
+  const nextTier =
+    currentPosition != null ? getNextTier(currentPosition) : null;
+
+  // Get the target threshold for the next tier
+  const tierThreshold =
+    nextTier && latestTitle ? getTierThreshold(nextTier, latestTitle) : null;
+  const noThreshold = !insufficientHistory && nextTier != null && tierThreshold == null;
+
   const prediction =
-    latestTitle?.top1000 != null
-      ? computePrediction(history!, latestTitle.top1000)
+    tierThreshold != null && history
+      ? computePrediction(history, tierThreshold)
       : null;
 
-  const alreadyIn = prediction != null && prediction.currentPosition <= 1000;
+  const isElite = currentPosition != null && currentPosition <= 10;
+  const tierLabel = nextTier
+    ? t(`prediction.tier.${nextTier}`)
+    : null;
 
   return (
     <Card className="stat-card">
@@ -166,7 +193,7 @@ export function RatingPrediction({
           </h3>
         </div>
 
-        {insufficientHistory || noThreshold || !prediction ? (
+        {insufficientHistory || noThreshold ? (
           <div className="px-2 py-4 text-center">
             <p className="text-xs text-muted-foreground font-mono">
               {insufficientHistory
@@ -174,13 +201,21 @@ export function RatingPrediction({
                 : t("prediction.noThreshold")}
             </p>
           </div>
-        ) : alreadyIn ? (
+        ) : isElite ? (
           <div className="px-2 py-4 text-center">
-            <p className="text-lg font-bold text-emerald-500">
-              {t("prediction.alreadyIn")}
+            <p className="text-lg font-bold text-amber-500">
+              {t("prediction.elite")}
             </p>
             <p className="text-xs text-muted-foreground mt-1 font-mono">
-              {t("prediction.currentRank", { rank: prediction.currentPosition.toLocaleString() })}
+              {t("prediction.currentRank", {
+                rank: currentPosition!.toLocaleString(),
+              })}
+            </p>
+          </div>
+        ) : !prediction ? (
+          <div className="px-2 py-4 text-center">
+            <p className="text-xs text-muted-foreground font-mono">
+              {t("prediction.noThreshold")}
             </p>
           </div>
         ) : prediction.estimatedGames != null ? (
@@ -188,16 +223,22 @@ export function RatingPrediction({
             <StatBlock
               label={t("prediction.ratingGap")}
               value={`${prediction.ratingGap.toLocaleString()} pts`}
-              sub={t("prediction.target", { target: prediction.targetRating.toLocaleString() })}
+              sub={t("prediction.target", {
+                tier: tierLabel,
+                target: prediction.targetRating.toLocaleString(),
+              })}
             />
             <StatBlock
               label={t("prediction.avgWins")}
               value={prediction.avgWins.toFixed(1)}
-              sub={t("prediction.tenWinRate", { rate: (prediction.tenWinRate * 100).toFixed(0) })}
+              sub={t("prediction.tenWinRate", {
+                rate: (prediction.tenWinRate * 100).toFixed(0),
+              })}
             />
             <StatBlock
               label={t("prediction.estGames")}
               value={prediction.estimatedGames.toLocaleString()}
+              sub={t("prediction.estGamesSub", { tier: tierLabel })}
               highlight
             />
             <StatBlock
@@ -212,12 +253,17 @@ export function RatingPrediction({
               <StatBlock
                 label={t("prediction.ratingGap")}
                 value={`${prediction.ratingGap.toLocaleString()} pts`}
-                sub={t("prediction.target", { target: prediction.targetRating.toLocaleString() })}
+                sub={t("prediction.target", {
+                  tier: tierLabel,
+                  target: prediction.targetRating.toLocaleString(),
+                })}
               />
               <StatBlock
                 label={t("prediction.avgWins")}
                 value={prediction.avgWins.toFixed(1)}
-                sub={t("prediction.tenWinRate", { rate: (prediction.tenWinRate * 100).toFixed(0) })}
+                sub={t("prediction.tenWinRate", {
+                  rate: (prediction.tenWinRate * 100).toFixed(0),
+                })}
               />
               <StatBlock
                 label={t("prediction.equilibrium")}
@@ -232,17 +278,23 @@ export function RatingPrediction({
               />
             </div>
             <p className="text-xs text-amber-500/80 font-mono">
-              {t("prediction.stallWarning", { rating: prediction.equilibriumRating.toLocaleString() })}
+              {t("prediction.stallWarning", {
+                rating: prediction.equilibriumRating.toLocaleString(),
+                tier: tierLabel,
+              })}
             </p>
           </div>
         )}
 
-        {prediction && latestTitle?.top1000 != null && (
+        {prediction && tierThreshold != null && (
           <p className="text-[10px] text-muted-foreground/50 font-mono mt-3 px-2">
             {t("prediction.formula")}{" "}
             {prediction.tenWinRate > 0 && t("prediction.formula10win")}.{" "}
             {t("prediction.basedOn", { count: prediction.totalGamesPlayed })}{" "}
-            {t("prediction.assumesThreshold", { threshold: latestTitle.top1000.toLocaleString() })}
+            {t("prediction.assumesThreshold", {
+              tier: tierLabel,
+              threshold: tierThreshold.toLocaleString(),
+            })}
           </p>
         )}
       </CardContent>

@@ -58,30 +58,34 @@ export default {
   "pin.maxReached": "Max {{max}} pinned players",
 
   // RatingPrediction
-  "prediction.heading": "Top 1000 Prediction",
-  "prediction.alreadyIn": "Already in Top 1000!",
+  "prediction.heading": "Rank Prediction",
+  "prediction.tier.top10": "Top 10",
+  "prediction.tier.top100": "Top 100",
+  "prediction.tier.top1000": "Top 1000",
+  "prediction.elite": "You are an elite Top 10 player!",
   "prediction.currentRank": "Current rank: #{{rank}}",
   "prediction.ratingGap": "Rating Gap",
-  "prediction.target": "Target: {{target}}",
+  "prediction.target": "{{tier}} target: {{target}}",
   "prediction.avgWins": "Avg Wins / Game",
   "prediction.tenWinRate": "10-win rate: {{rate}}%",
   "prediction.estGames": "Est. Games Needed",
+  "prediction.estGamesSub": "To reach {{tier}}",
   "prediction.equilibrium": "Equilibrium",
   "prediction.equilibriumSub": "Rating ceiling at current skill",
   "prediction.needAvgWins": "Need Avg Wins",
   "prediction.needAvgWinsSub": "To sustain target rating",
   "prediction.stallWarning":
-    "At current win rate, rating stalls around {{rating}} — need higher avg wins to reach top 1000.",
+    "At current win rate, rating stalls around {{rating}} — need higher avg wins to reach {{tier}}.",
   "prediction.formula": "ΔR = 5(W − R/100)",
   "prediction.formula10win": "+ 5 for 10-win",
   "prediction.basedOn": "Based on {{count}} game sessions.",
   "prediction.assumesThreshold":
-    "Assumes top-1000 threshold stays at {{threshold}}.",
+    "Assumes {{tier}} threshold stays at {{threshold}}.",
 
   "prediction.noHistory":
     "Need at least 2 rating snapshots to predict. Data is collected every 30 minutes — check back soon.",
   "prediction.noThreshold":
-    "Top 1000 threshold data not available yet for this season.",
+    "Threshold data not available yet for this season.",
 
   // ThemeToggle
   "theme.switchToLight": "Switch to light mode",
