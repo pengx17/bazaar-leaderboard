@@ -411,13 +411,26 @@ async function main(): Promise<void> {
     SEASON_ID_OVERRIDE ?? (await detectLatestSeason(accessToken));
   log(`Using season ID: ${seasonId}`);
 
-  // 3. Fetch leaderboard
-  const leaderboard = await fetchLeaderboard(accessToken, seasonId);
+  // 3. Fetch leaderboard (retry on empty response — the API is flaky)
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 5000;
+  let leaderboard: LeaderboardResponse | null = null;
 
-  if (leaderboard.entries.length === 0) {
-    log("No entries returned from leaderboard API. Skipping storage.");
-    return;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const result = await fetchLeaderboard(accessToken, seasonId);
+    if (result.entries.length > 0) {
+      leaderboard = result;
+      break;
+    }
+    if (attempt < MAX_RETRIES) {
+      log(`Empty response (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY_MS / 1000}s...`);
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    } else {
+      log(`Empty response after ${MAX_RETRIES} attempts. Skipping storage.`);
+    }
   }
+
+  if (!leaderboard) return;
 
   // 4. Store in D1
   const fetchedAt = new Date().toISOString();
