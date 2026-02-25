@@ -14,8 +14,11 @@ function read(): string[] {
   }
 }
 
+let cachedSnapshot = read();
+
 function write(players: string[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
+  cachedSnapshot = read();
   emitChange();
 }
 
@@ -33,7 +36,7 @@ function subscribe(listener: () => void) {
 }
 
 function getSnapshot(): string[] {
-  return read();
+  return cachedSnapshot;
 }
 
 const serverSnapshot: string[] = [];
