@@ -242,18 +242,18 @@ function LeaderboardRow({
       }`}
     >
       {/* Rank */}
-      <span className="flex items-center gap-1 font-mono text-sm tabular-nums text-muted-foreground">
+      <span className="flex items-center gap-1 font-mono text-sm font-medium tabular-nums text-foreground/70">
         {entry.position}
         <ChangeIndicator value={entry.positionChange} />
       </span>
 
       {/* Player name */}
-      <span className="text-sm truncate text-foreground/90 group-hover:text-amber-500 transition-colors">
+      <span className="text-sm font-medium truncate text-foreground group-hover:text-amber-500 transition-colors">
         {entry.username}
       </span>
 
       {/* Rating */}
-      <span className="text-right flex items-center justify-end gap-1 font-mono text-sm tabular-nums text-muted-foreground">
+      <span className="text-right flex items-center justify-end gap-1 font-mono text-sm font-medium tabular-nums text-foreground/70">
         {entry.rating.toLocaleString()}
         <ChangeIndicator value={entry.ratingChange} />
       </span>
