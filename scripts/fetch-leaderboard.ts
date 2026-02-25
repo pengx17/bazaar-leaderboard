@@ -447,6 +447,16 @@ async function main(): Promise<void> {
   // 5. Cleanup old seasons
   await cleanupOldSeasons();
 
+  // 6. Proactively refresh token for next run
+  //    Access token expires in ~15 min but CI runs every 30 min,
+  //    so always refresh at the end to keep the refresh token chain alive.
+  log("Proactively refreshing tokens for next run...");
+  const currentTokens = await getAuthTokens();
+  await refreshAuthTokens(
+    currentTokens.access_token,
+    currentTokens.refresh_token
+  );
+
   log("=== Bazaar Leaderboard Fetch Complete ===");
 }
 
