@@ -100,6 +100,11 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
     error,
   } = useFetch(() => fetchRatingHistory(username, seasonId), [username, seasonId]);
 
+  const prediction = useMemo(
+    () => (data && data.length >= 2 ? buildPredictionCurve(data) : null),
+    [data]
+  );
+
   if (loading) {
     return (
       <Card className="stat-card">
@@ -131,8 +136,6 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       </Card>
     );
   }
-
-  const prediction = useMemo(() => buildPredictionCurve(data), [data]);
 
   // Merge actual + predicted time axis
   const actualTimes = data.map((d) => d.time);
