@@ -36,7 +36,6 @@ export default {
   "chart.rating": "分数",
   "chart.rank": "排名",
   "chart.position": "排名",
-  "chart.prediction": "预测",
 
   // TitleRatingChart
   "titleChart.heading": "段位分数线",
