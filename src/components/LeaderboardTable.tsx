@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
-import { Search, ChevronLeft, ChevronRight, Trophy, X } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { fetchLeaderboard } from "@/lib/api";
 import type { LeaderboardEntry } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
@@ -211,10 +211,6 @@ function LeaderboardRow({
   entry: LeaderboardEntry;
   pinned?: boolean;
 }) {
-  const isTop3 = entry.position <= 3;
-  const isTop10 = entry.position <= 10;
-  const isTop100 = entry.position <= 100;
-
   return (
     <Link
       href={`/player/${encodeURIComponent(entry.username)}`}
@@ -225,50 +221,17 @@ function LeaderboardRow({
       }`}
     >
       {/* Rank */}
-      <span className="flex items-center gap-1.5">
-        {isTop3 ? (
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/15 text-amber-500">
-            <Trophy className="w-3 h-3" />
-          </span>
-        ) : (
-          <span
-            className={`font-mono text-sm tabular-nums ${
-              isTop10
-                ? "text-amber-500/80 font-bold"
-                : isTop100
-                  ? "text-foreground/80"
-                  : "text-muted-foreground"
-            }`}
-          >
-            {entry.position}
-          </span>
-        )}
-        {isTop3 && (
-          <span className="font-mono text-xs text-amber-500 font-bold tabular-nums">
-            {entry.position}
-          </span>
-        )}
+      <span className="font-mono text-sm tabular-nums text-muted-foreground">
+        {entry.position}
       </span>
 
       {/* Player name */}
-      <span
-        className={`text-sm truncate group-hover:text-amber-500 transition-colors ${
-          isTop10 ? "font-bold text-foreground" : "text-foreground/90"
-        }`}
-      >
+      <span className="text-sm truncate text-foreground/90 group-hover:text-amber-500 transition-colors">
         {entry.username}
       </span>
 
       {/* Rating */}
-      <span
-        className={`text-right font-mono text-sm tabular-nums ${
-          isTop3
-            ? "text-amber-500 font-bold"
-            : isTop10
-              ? "text-foreground font-semibold"
-              : "text-muted-foreground"
-        }`}
-      >
+      <span className="text-right font-mono text-sm tabular-nums text-muted-foreground">
         {entry.rating.toLocaleString()}
       </span>
 
