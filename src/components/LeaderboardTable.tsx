@@ -47,9 +47,9 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
     [seasonId, page, debouncedSearch]
   );
 
-  // Fetch pinned players' entries (only when not searching)
+  // Fetch pinned players' entries (always, regardless of search)
   const pinnedKey = pinned.join(",");
-  const showPinned = pinned.length > 0 && !debouncedSearch;
+  const showPinned = pinned.length > 0;
   const { data: pinnedEntries } = useFetch(
     () =>
       showPinned
@@ -72,7 +72,7 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
               .sort((a, b) => a.position - b.position)
           )
         : Promise.resolve([]),
-    [seasonId, pinnedKey, debouncedSearch]
+    [seasonId, pinnedKey]
   );
 
   // Deduplicate: remove pinned players from regular rows
