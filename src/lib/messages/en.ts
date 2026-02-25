@@ -12,8 +12,6 @@ export default {
   "home.titleThresholds": "Title Thresholds",
 
   // StatsPanel
-  "stats.legends": "Legends",
-  "stats.floor": "Floor",
 
   // LeaderboardTable
   "leaderboard.searchPlaceholder": "Search player...",

@@ -12,8 +12,6 @@ export default {
   "home.titleThresholds": "段位门槛",
 
   // StatsPanel
-  "stats.legends": "传奇玩家",
-  "stats.floor": "门槛",
 
   // LeaderboardTable
   "leaderboard.searchPlaceholder": "搜索玩家...",
