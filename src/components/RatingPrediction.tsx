@@ -201,7 +201,7 @@ export function RatingPrediction({
         </div>
 
         {insufficientHistory || noThreshold || fewGames ? (
-          <div className="px-2 py-4 text-center">
+          <div className="px-2 py-3">
             <p className="text-xs text-muted-foreground font-mono">
               {insufficientHistory
                 ? t("prediction.noHistory")
@@ -211,7 +211,7 @@ export function RatingPrediction({
             </p>
           </div>
         ) : isElite ? (
-          <div className="px-2 py-4 text-center">
+          <div className="px-2 py-3">
             <p className="text-lg font-bold text-amber-500">
               {t("prediction.elite")}
             </p>
