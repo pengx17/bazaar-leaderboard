@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { useState, useEffect, useReducer } from "react";
 import ReactECharts from "echarts-for-react";
 import { X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,10 +44,13 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+type Metric = "rating" | "rank";
+
 export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
   const { pinned, clear } = usePinnedPlayers();
   const { theme } = useTheme();
   const ct = getChartTheme(theme);
+  const [metric, setMetric] = useState<Metric>("rating");
 
   const [state, dispatch] = useReducer(reducer, {
     players: [],
@@ -117,14 +120,17 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
   }
   const times = [...timeSet].sort();
 
-  // Build series: for each player, map rating values to the unified time axis
+  // Build series: for each player, map values to the unified time axis
+  const isRank = metric === "rank";
   const series = state.players.map((p, i) => {
-    const ratingByTime = new Map(p.history.map((h) => [h.time, h.rating]));
+    const valueByTime = new Map(
+      p.history.map((h) => [h.time, isRank ? h.position : h.rating])
+    );
     const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
     return {
       name: p.username,
       type: "line" as const,
-      data: times.map((t) => ratingByTime.get(t) ?? null),
+      data: times.map((t) => valueByTime.get(t) ?? null),
       smooth: true,
       symbol: "none",
       connectNulls: true,
@@ -155,10 +161,11 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
         let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
         for (const p of params) {
           if (p.value == null) continue;
+          const display = isRank ? `#${p.value.toLocaleString()}` : p.value.toLocaleString();
           html += `<div style="display:flex;align-items:center;gap:6px">
             <span style="width:8px;height:2px;background:${p.color}"></span>
             <span>${p.seriesName}:</span>
-            <strong>${p.value.toLocaleString()}</strong>
+            <strong>${display}</strong>
           </div>`;
         }
         return html;
@@ -199,7 +206,8 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
     },
     yAxis: {
       type: "value" as const,
-      name: "Rating",
+      name: isRank ? "Rank" : "Rating",
+      inverse: isRank,
       nameTextStyle: {
         color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
@@ -221,13 +229,31 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
     <Card className="stat-card">
       <CardContent className="p-4 pt-5">
         <div className="flex items-center justify-between px-2 mb-4">
-          <div>
-            <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-              Pinned Players
-            </h3>
-            <p className="text-xs text-muted-foreground/60 mt-1">
-              Rating history for pinned players this season
-            </p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+                Pinned Players
+              </h3>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                {isRank ? "Rank" : "Rating"} history for pinned players this season
+              </p>
+            </div>
+            {/* Rating / Rank toggle */}
+            <div className="flex items-center rounded-md border border-border/40 overflow-hidden">
+              {(["rating", "rank"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMetric(m)}
+                  className={`px-2.5 py-1 text-xs font-mono transition-colors ${
+                    metric === m
+                      ? "bg-amber-500/15 text-amber-500 font-bold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-card/80"
+                  }`}
+                >
+                  {m === "rating" ? "Rating" : "Rank"}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {/* Pinned player chips with unpin */}
