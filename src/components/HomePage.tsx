@@ -1,6 +1,7 @@
 import { StatsPanel } from "@/components/StatsPanel";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { TitleRatingChart } from "@/components/TitleRatingChart";
+import { PinnedPlayersChart } from "@/components/PinnedPlayersChart";
 import { fetchStats } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
@@ -36,6 +37,13 @@ export function HomePage() {
           <StatsPanel stats={stats} />
         )}
       </section>
+
+      {/* Pinned Players */}
+      {seasonId != null && (
+        <section className="mb-10">
+          <PinnedPlayersChart seasonId={seasonId} />
+        </section>
+      )}
 
       {/* Leaderboard */}
       {seasonId != null && (

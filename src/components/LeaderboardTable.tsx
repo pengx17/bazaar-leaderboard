@@ -4,6 +4,7 @@ import { Search, ChevronLeft, ChevronRight, Trophy, X } from "lucide-react";
 import { fetchLeaderboard } from "@/lib/api";
 import type { LeaderboardEntry } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
+import { PinButton } from "@/components/PinButton";
 
 const PAGE_SIZE = 50;
 const DEBOUNCE_MS = 300;
@@ -74,10 +75,11 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
       {/* Table */}
       <div className="rounded-lg border border-border/40 overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-[4rem_1fr_6rem] sm:grid-cols-[5rem_1fr_8rem] items-center px-4 py-2.5 bg-card/30 border-b border-border/30 text-xs font-mono uppercase tracking-widest text-muted-foreground">
+        <div className="grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-2.5 bg-card/30 border-b border-border/30 text-xs font-mono uppercase tracking-widest text-muted-foreground">
           <span>Rank</span>
           <span>Player</span>
           <span className="text-right">Rating</span>
+          <span />
         </div>
 
         {/* Body */}
@@ -86,7 +88,7 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
             {[...Array(10)].map((_, i) => (
               <div
                 key={i}
-                className="grid grid-cols-[4rem_1fr_6rem] sm:grid-cols-[5rem_1fr_8rem] items-center px-4 py-3 animate-pulse"
+                className="grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-3 animate-pulse"
               >
                 <div className="h-4 bg-white/5 rounded w-8" />
                 <div className="h-4 bg-white/5 rounded w-32" />
@@ -156,7 +158,7 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
   return (
     <Link
       href={`/player/${encodeURIComponent(entry.username)}`}
-      className="grid grid-cols-[4rem_1fr_6rem] sm:grid-cols-[5rem_1fr_8rem] items-center px-4 py-2.5 hover:bg-amber-500/[0.04] transition-colors cursor-pointer group"
+      className="grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-2.5 hover:bg-amber-500/[0.04] transition-colors cursor-pointer group"
     >
       {/* Rank */}
       <span className="flex items-center gap-1.5">
@@ -204,6 +206,11 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
         }`}
       >
         {entry.rating.toLocaleString()}
+      </span>
+
+      {/* Pin */}
+      <span className="flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <PinButton username={entry.username} size="sm" />
       </span>
     </Link>
   );

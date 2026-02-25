@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, Hash, Zap } from "lucide-react";
 import { RatingChart } from "@/components/RatingChart";
+import { PinButton } from "@/components/PinButton";
 import { fetchStats, fetchLeaderboard } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
@@ -42,9 +43,12 @@ export function PlayerPage({ params }: { params: { username: string } }) {
 
       {/* Player header */}
       <div className="mb-8">
-        <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-3">
-          {username}
-        </h1>
+        <div className="flex items-center gap-2 mb-3">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight">
+            {username}
+          </h1>
+          <PinButton username={username} size="md" />
+        </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {/* Current rank & rating */}
           {playerEntry ? (
