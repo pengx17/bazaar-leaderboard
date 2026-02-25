@@ -400,64 +400,72 @@ async function cleanupOldSeasons(): Promise<void> {
 // Main
 // ---------------------------------------------------------------------------
 
+async function proactiveRefresh(): Promise<void> {
+  try {
+    log("Proactively refreshing tokens for next run...");
+    const tokens = await getAuthTokens();
+    await refreshAuthTokens(tokens.access_token, tokens.refresh_token);
+  } catch (err) {
+    // Don't let refresh failure mask the original error
+    log(`Warning: proactive token refresh failed: ${err}`);
+  }
+}
+
 async function main(): Promise<void> {
   log("=== Bazaar Leaderboard Fetch Start ===");
 
-  // 1. Get a valid access token (refresh if needed)
-  const accessToken = await ensureValidToken();
+  try {
+    // 1. Get a valid access token (refresh if needed)
+    const accessToken = await ensureValidToken();
 
-  // 2. Determine which season to fetch
-  const seasonId =
-    SEASON_ID_OVERRIDE ?? (await detectLatestSeason(accessToken));
-  log(`Using season ID: ${seasonId}`);
+    // 2. Determine which season to fetch
+    const seasonId =
+      SEASON_ID_OVERRIDE ?? (await detectLatestSeason(accessToken));
+    log(`Using season ID: ${seasonId}`);
 
-  // 3. Fetch leaderboard (retry on empty response — the API is flaky)
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY_MS = 5000;
-  let leaderboard: LeaderboardResponse | null = null;
+    // 3. Fetch leaderboard (retry on empty response — the API is flaky)
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 5000;
+    let leaderboard: LeaderboardResponse | null = null;
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const result = await fetchLeaderboard(accessToken, seasonId);
-    if (result.entries.length > 0) {
-      leaderboard = result;
-      break;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const result = await fetchLeaderboard(accessToken, seasonId);
+      if (result.entries.length > 0) {
+        leaderboard = result;
+        break;
+      }
+      if (attempt < MAX_RETRIES) {
+        log(`Empty response (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY_MS / 1000}s...`);
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      } else {
+        log(`Empty response after ${MAX_RETRIES} attempts.`);
+      }
     }
-    if (attempt < MAX_RETRIES) {
-      log(`Empty response (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY_MS / 1000}s...`);
-      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-    } else {
-      log(`Empty response after ${MAX_RETRIES} attempts.`);
+
+    if (!leaderboard) {
+      throw new Error(`Leaderboard API returned empty data after ${MAX_RETRIES} attempts`);
     }
+
+    // 4. Store in D1
+    const fetchedAt = new Date().toISOString();
+    const snapshotId = await createSnapshot(
+      seasonId,
+      leaderboard.totalEntries,
+      fetchedAt
+    );
+
+    await storeEntries(snapshotId, leaderboard.entries);
+
+    // 5. Cleanup old seasons
+    await cleanupOldSeasons();
+
+    log("=== Bazaar Leaderboard Fetch Complete ===");
+  } finally {
+    // Always refresh token for next run, even if main flow failed.
+    // Access token expires in ~15 min but CI runs every 30 min,
+    // so always refresh to keep the refresh token chain alive.
+    await proactiveRefresh();
   }
-
-  if (!leaderboard) {
-    throw new Error(`Leaderboard API returned empty data after ${MAX_RETRIES} attempts`);
-  }
-
-  // 4. Store in D1
-  const fetchedAt = new Date().toISOString();
-  const snapshotId = await createSnapshot(
-    seasonId,
-    leaderboard.totalEntries,
-    fetchedAt
-  );
-
-  await storeEntries(snapshotId, leaderboard.entries);
-
-  // 5. Cleanup old seasons
-  await cleanupOldSeasons();
-
-  // 6. Proactively refresh token for next run
-  //    Access token expires in ~15 min but CI runs every 30 min,
-  //    so always refresh at the end to keep the refresh token chain alive.
-  log("Proactively refreshing tokens for next run...");
-  const currentTokens = await getAuthTokens();
-  await refreshAuthTokens(
-    currentTokens.access_token,
-    currentTokens.refresh_token
-  );
-
-  log("=== Bazaar Leaderboard Fetch Complete ===");
 }
 
 main().catch((err: unknown) => {
