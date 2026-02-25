@@ -143,15 +143,18 @@ export function RatingPrediction({
     );
   }
 
-  if (!history || !titleHistory || history.length < 2) return null;
+  const insufficientHistory =
+    !history || !titleHistory || history.length < 2;
+  const latestTitle = insufficientHistory
+    ? null
+    : titleHistory[titleHistory.length - 1];
+  const noThreshold = !insufficientHistory && !latestTitle?.top1000;
+  const prediction =
+    latestTitle?.top1000 != null
+      ? computePrediction(history!, latestTitle.top1000)
+      : null;
 
-  const latestTitle = titleHistory[titleHistory.length - 1];
-  if (!latestTitle?.top1000) return null;
-
-  const prediction = computePrediction(history, latestTitle.top1000);
-  if (!prediction) return null;
-
-  const alreadyIn = prediction.currentPosition <= 1000;
+  const alreadyIn = prediction != null && prediction.currentPosition <= 1000;
 
   return (
     <Card className="stat-card">
@@ -163,7 +166,15 @@ export function RatingPrediction({
           </h3>
         </div>
 
-        {alreadyIn ? (
+        {insufficientHistory || noThreshold || !prediction ? (
+          <div className="px-2 py-4 text-center">
+            <p className="text-xs text-muted-foreground font-mono">
+              {insufficientHistory
+                ? t("prediction.noHistory")
+                : t("prediction.noThreshold")}
+            </p>
+          </div>
+        ) : alreadyIn ? (
           <div className="px-2 py-4 text-center">
             <p className="text-lg font-bold text-emerald-500">
               {t("prediction.alreadyIn")}
@@ -226,12 +237,14 @@ export function RatingPrediction({
           </div>
         )}
 
-        <p className="text-[10px] text-muted-foreground/50 font-mono mt-3 px-2">
-          {t("prediction.formula")}{" "}
-          {prediction.tenWinRate > 0 && t("prediction.formula10win")}.{" "}
-          {t("prediction.basedOn", { count: prediction.totalGamesPlayed })}{" "}
-          {t("prediction.assumesThreshold", { threshold: latestTitle.top1000.toLocaleString() })}
-        </p>
+        {prediction && latestTitle?.top1000 != null && (
+          <p className="text-[10px] text-muted-foreground/50 font-mono mt-3 px-2">
+            {t("prediction.formula")}{" "}
+            {prediction.tenWinRate > 0 && t("prediction.formula10win")}.{" "}
+            {t("prediction.basedOn", { count: prediction.totalGamesPlayed })}{" "}
+            {t("prediction.assumesThreshold", { threshold: latestTitle.top1000.toLocaleString() })}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

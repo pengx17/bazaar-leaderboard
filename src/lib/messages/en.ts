@@ -78,6 +78,11 @@ export default {
   "prediction.assumesThreshold":
     "Assumes top-1000 threshold stays at {{threshold}}.",
 
+  "prediction.noHistory":
+    "Need at least 2 rating snapshots to predict. Data is collected every 30 minutes — check back soon.",
+  "prediction.noThreshold":
+    "Top 1000 threshold data not available yet for this season.",
+
   // ThemeToggle
   "theme.switchToLight": "Switch to light mode",
   "theme.switchToDark": "Switch to dark mode",

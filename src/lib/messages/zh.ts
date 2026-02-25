@@ -76,6 +76,10 @@ export default {
   "prediction.basedOn": "基于 {{count}} 场对局数据。",
   "prediction.assumesThreshold": "假设前 1000 门槛保持在 {{threshold}}。",
 
+  "prediction.noHistory":
+    "需要至少 2 个分数快照才能预测。数据每 30 分钟采集一次，请稍后再看。",
+  "prediction.noThreshold": "本赛季的前 1000 门槛数据暂不可用。",
+
   // ThemeToggle
   "theme.switchToLight": "切换到亮色模式",
   "theme.switchToDark": "切换到暗色模式",
