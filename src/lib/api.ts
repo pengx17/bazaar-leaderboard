@@ -27,6 +27,8 @@ export interface LeaderboardEntry {
   position: number;
   username: string;
   rating: number;
+  ratingChange: number | null;
+  positionChange: number | null;
 }
 
 export interface LeaderboardData {

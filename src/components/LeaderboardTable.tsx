@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
-import { Search, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, X, TrendingUp, TrendingDown } from "lucide-react";
 import { fetchLeaderboard } from "@/lib/api";
 import type { LeaderboardEntry } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
@@ -206,6 +206,25 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
   );
 }
 
+function ChangeIndicator({ value }: { value: number | null }) {
+  if (value == null || value === 0) return null;
+  const positive = value > 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[10px] font-mono tabular-nums ${
+        positive ? "text-emerald-500" : "text-red-400"
+      }`}
+    >
+      {positive ? (
+        <TrendingUp className="w-3 h-3" />
+      ) : (
+        <TrendingDown className="w-3 h-3" />
+      )}
+      {Math.abs(value).toLocaleString()}
+    </span>
+  );
+}
+
 function LeaderboardRow({
   entry,
   pinned,
@@ -223,8 +242,9 @@ function LeaderboardRow({
       }`}
     >
       {/* Rank */}
-      <span className="font-mono text-sm tabular-nums text-muted-foreground">
+      <span className="flex items-center gap-1 font-mono text-sm tabular-nums text-muted-foreground">
         {entry.position}
+        <ChangeIndicator value={entry.positionChange} />
       </span>
 
       {/* Player name */}
@@ -233,8 +253,9 @@ function LeaderboardRow({
       </span>
 
       {/* Rating */}
-      <span className="text-right font-mono text-sm tabular-nums text-muted-foreground">
+      <span className="text-right flex items-center justify-end gap-1 font-mono text-sm tabular-nums text-muted-foreground">
         {entry.rating.toLocaleString()}
+        <ChangeIndicator value={entry.ratingChange} />
       </span>
 
       {/* Pin */}

@@ -51,6 +51,26 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       );
     }
 
+    // Find a snapshot from ~24h ago to compute deltas
+    const prevSnapshot = await db
+      .prepare(
+        `SELECT id FROM snapshots
+         WHERE season_id = ?
+           AND fetched_at <= datetime((SELECT fetched_at FROM snapshots WHERE id = ?), '-1 day')
+         ORDER BY fetched_at DESC
+         LIMIT 1`
+      )
+      .bind(seasonId, snapshot.id)
+      .first<{ id: number }>();
+
+    type EntryRow = {
+      position: number;
+      username: string;
+      rating: number;
+      prev_position: number | null;
+      prev_rating: number | null;
+    };
+
     let entries;
     let total: number;
 
@@ -67,34 +87,76 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         .first<{ cnt: number }>();
       total = countResult?.cnt ?? 0;
 
-      entries = await db
-        .prepare(
-          `SELECT position, username, rating FROM entries
-           WHERE snapshot_id = ? AND username LIKE ?
-           ORDER BY position ASC
-           LIMIT ? OFFSET ?`
-        )
-        .bind(snapshot.id, pattern, limit, offset)
-        .all<{ position: number; username: string; rating: number }>();
+      if (prevSnapshot) {
+        entries = await db
+          .prepare(
+            `SELECT e.position, e.username, e.rating,
+                    p.position AS prev_position, p.rating AS prev_rating
+             FROM entries e
+             LEFT JOIN entries p ON p.snapshot_id = ? AND p.username = e.username
+             WHERE e.snapshot_id = ? AND e.username LIKE ?
+             ORDER BY e.position ASC
+             LIMIT ? OFFSET ?`
+          )
+          .bind(prevSnapshot.id, snapshot.id, pattern, limit, offset)
+          .all<EntryRow>();
+      } else {
+        entries = await db
+          .prepare(
+            `SELECT position, username, rating, NULL AS prev_position, NULL AS prev_rating
+             FROM entries
+             WHERE snapshot_id = ? AND username LIKE ?
+             ORDER BY position ASC
+             LIMIT ? OFFSET ?`
+          )
+          .bind(snapshot.id, pattern, limit, offset)
+          .all<EntryRow>();
+      }
     } else {
       total = snapshot.total_entries;
 
-      entries = await db
-        .prepare(
-          `SELECT position, username, rating FROM entries
-           WHERE snapshot_id = ?
-           ORDER BY position ASC
-           LIMIT ? OFFSET ?`
-        )
-        .bind(snapshot.id, limit, offset)
-        .all<{ position: number; username: string; rating: number }>();
+      if (prevSnapshot) {
+        entries = await db
+          .prepare(
+            `SELECT e.position, e.username, e.rating,
+                    p.position AS prev_position, p.rating AS prev_rating
+             FROM entries e
+             LEFT JOIN entries p ON p.snapshot_id = ? AND p.username = e.username
+             WHERE e.snapshot_id = ?
+             ORDER BY e.position ASC
+             LIMIT ? OFFSET ?`
+          )
+          .bind(prevSnapshot.id, snapshot.id, limit, offset)
+          .all<EntryRow>();
+      } else {
+        entries = await db
+          .prepare(
+            `SELECT position, username, rating, NULL AS prev_position, NULL AS prev_rating
+             FROM entries
+             WHERE snapshot_id = ?
+             ORDER BY position ASC
+             LIMIT ? OFFSET ?`
+          )
+          .bind(snapshot.id, limit, offset)
+          .all<EntryRow>();
+      }
     }
+
+    const mapped = entries.results.map((e) => ({
+      position: e.position,
+      username: e.username,
+      rating: e.rating,
+      ratingChange:
+        e.prev_rating != null ? e.rating - e.prev_rating : null,
+      positionChange:
+        e.prev_position != null ? e.prev_position - e.position : null,
+    }));
 
     return Response.json(
       {
         seasonId,
         total,
-        entries: entries.results,
+        entries: mapped,
       },
       { headers: corsHeaders }
     );
