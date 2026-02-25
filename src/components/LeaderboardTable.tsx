@@ -65,7 +65,9 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
               );
             })
           ).then((entries) =>
-            entries.filter((e): e is LeaderboardEntry => e !== null)
+            entries
+              .filter((e): e is LeaderboardEntry => e !== null)
+              .sort((a, b) => a.position - b.position)
           )
         : Promise.resolve([]),
     [seasonId, pinnedKey, debouncedSearch]
