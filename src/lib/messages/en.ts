@@ -35,7 +35,7 @@ export default {
   "chart.noData": 'No data found for "{{username}}"',
   "chart.rating": "Rating",
   "chart.rank": "Rank",
-  "chart.position": "Position",
+  "chart.position": "Rank",
 
   // TitleRatingChart
   "titleChart.heading": "Title Cutoff Lines",
@@ -71,11 +71,11 @@ export default {
   "prediction.estGames": "Est. Games Needed",
   "prediction.estGamesSub": "To reach {{tier}}",
   "prediction.equilibrium": "Equilibrium",
-  "prediction.equilibriumSub": "Rating ceiling at current skill",
+  "prediction.equilibriumSub": "Projected steady-state rating",
   "prediction.needAvgWins": "Need Avg Wins",
   "prediction.needAvgWinsSub": "To sustain target rating",
   "prediction.stallWarning":
-    "At current win rate, rating stalls around {{rating}} — need higher avg wins to reach {{tier}}.",
+    "At current win rate, rating is projected to plateau around {{rating}}. Reaching {{tier}} requires a higher avg wins.",
   "prediction.formula": "ΔR = 5(W − R/100)",
   "prediction.formula10win": "+ 5 for 10-win",
   "prediction.basedOn": "Based on {{count}} game sessions.",
@@ -83,9 +83,9 @@ export default {
     "Assumes {{tier}} threshold stays at {{threshold}}.",
 
   "prediction.noHistory":
-    "Need at least 2 rating snapshots to predict. Data is collected every 30 minutes — check back soon.",
+    "Gathering data — predictions will be available shortly (updated every 30 min).",
   "prediction.fewGames":
-    "Need at least 10 game sessions to predict. Keep playing!",
+    "Collecting data — predictions unlock after 10 recorded sessions in Legendary.",
   "prediction.noThreshold":
     "Threshold data not available yet for this season.",
 
