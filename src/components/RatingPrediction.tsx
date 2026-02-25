@@ -1,4 +1,5 @@
 import { Target } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchRatingHistory, fetchTitleRatingHistory } from "@/lib/api";
 import type { RatingHistoryPoint } from "@/lib/api";
@@ -132,6 +133,7 @@ export function RatingPrediction({
   username: string;
   seasonId: number;
 }) {
+  const { t } = useTranslation();
   const { data: history, loading: historyLoading } = useFetch(
     () => fetchRatingHistory(username, seasonId),
     [username, seasonId]
@@ -166,81 +168,78 @@ export function RatingPrediction({
         <div className="flex items-center gap-2 px-2 mb-4">
           <Target className="w-4 h-4 text-amber-500" />
           <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-            Top 1000 Prediction
+            {t("prediction.heading")}
           </h3>
         </div>
 
         {alreadyIn ? (
           <div className="px-2 py-4 text-center">
             <p className="text-lg font-bold text-emerald-500">
-              Already in Top 1000!
+              {t("prediction.alreadyIn")}
             </p>
             <p className="text-xs text-muted-foreground mt-1 font-mono">
-              Current rank: #{prediction.currentPosition.toLocaleString()}
+              {t("prediction.currentRank", { rank: prediction.currentPosition.toLocaleString() })}
             </p>
           </div>
         ) : prediction.estimatedGames != null ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-2">
             <StatBlock
-              label="Rating Gap"
+              label={t("prediction.ratingGap")}
               value={`${prediction.ratingGap.toLocaleString()} pts`}
-              sub={`Target: ${prediction.targetRating.toLocaleString()}`}
+              sub={t("prediction.target", { target: prediction.targetRating.toLocaleString() })}
             />
             <StatBlock
-              label="Avg Wins / Game"
+              label={t("prediction.avgWins")}
               value={prediction.avgWins.toFixed(1)}
-              sub={`10-win rate: ${(prediction.tenWinRate * 100).toFixed(0)}%`}
+              sub={t("prediction.tenWinRate", { rate: (prediction.tenWinRate * 100).toFixed(0) })}
             />
             <StatBlock
-              label="Est. Games Needed"
+              label={t("prediction.estGames")}
               value={prediction.estimatedGames.toLocaleString()}
               highlight
             />
             <StatBlock
-              label="Equilibrium"
+              label={t("prediction.equilibrium")}
               value={prediction.equilibriumRating.toLocaleString()}
-              sub="Rating ceiling at current skill"
+              sub={t("prediction.equilibriumSub")}
             />
           </div>
         ) : (
           <div className="px-2">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
               <StatBlock
-                label="Rating Gap"
+                label={t("prediction.ratingGap")}
                 value={`${prediction.ratingGap.toLocaleString()} pts`}
-                sub={`Target: ${prediction.targetRating.toLocaleString()}`}
+                sub={t("prediction.target", { target: prediction.targetRating.toLocaleString() })}
               />
               <StatBlock
-                label="Avg Wins / Game"
+                label={t("prediction.avgWins")}
                 value={prediction.avgWins.toFixed(1)}
-                sub={`10-win rate: ${(prediction.tenWinRate * 100).toFixed(0)}%`}
+                sub={t("prediction.tenWinRate", { rate: (prediction.tenWinRate * 100).toFixed(0) })}
               />
               <StatBlock
-                label="Equilibrium"
+                label={t("prediction.equilibrium")}
                 value={prediction.equilibriumRating.toLocaleString()}
-                sub="Rating ceiling at current skill"
+                sub={t("prediction.equilibriumSub")}
               />
               <StatBlock
-                label="Need Avg Wins"
+                label={t("prediction.needAvgWins")}
                 value={`>${(prediction.targetRating / 100).toFixed(1)}`}
-                sub="To sustain target rating"
+                sub={t("prediction.needAvgWinsSub")}
                 highlight
               />
             </div>
             <p className="text-xs text-amber-500/80 font-mono">
-              At current win rate, rating stalls around{" "}
-              {prediction.equilibriumRating.toLocaleString()} — need higher avg
-              wins to reach top 1000.
+              {t("prediction.stallWarning", { rating: prediction.equilibriumRating.toLocaleString() })}
             </p>
           </div>
         )}
 
         <p className="text-[10px] text-muted-foreground/50 font-mono mt-3 px-2">
-          ΔR = 5(W − R/100){" "}
-          {prediction.tenWinRate > 0 && "+ 5 for 10-win"}.
-          Based on {prediction.totalGamesPlayed} game sessions.
-          Assumes top-1000 threshold stays at{" "}
-          {latestTitle.top1000.toLocaleString()}.
+          {t("prediction.formula")}{" "}
+          {prediction.tenWinRate > 0 && t("prediction.formula10win")}.{" "}
+          {t("prediction.basedOn", { count: prediction.totalGamesPlayed })}{" "}
+          {t("prediction.assumesThreshold", { threshold: latestTitle.top1000.toLocaleString() })}
         </p>
       </CardContent>
     </Card>

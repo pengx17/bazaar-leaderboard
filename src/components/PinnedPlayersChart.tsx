@@ -1,6 +1,7 @@
 import { useState, useEffect, useReducer } from "react";
 import ReactECharts from "echarts-for-react";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchRatingHistory } from "@/lib/api";
 import type { RatingHistoryPoint } from "@/lib/api";
@@ -47,6 +48,7 @@ function reducer(state: State, action: Action): State {
 type Metric = "rating" | "rank";
 
 export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
+  const { t } = useTranslation();
   const { pinned, clear } = usePinnedPlayers();
   const { theme } = useTheme();
   const ct = getChartTheme(theme);
@@ -214,7 +216,7 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
     },
     yAxis: {
       type: "value" as const,
-      name: isRank ? "Rank" : "Rating",
+      name: isRank ? t("chart.rank") : t("chart.rating"),
       inverse: isRank,
       min: isRank ? Math.max(1, valMin - valPad) : valMin - valPad,
       max: valMax + valPad,
@@ -242,10 +244,10 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
           <div className="flex items-center gap-3">
             <div>
               <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-                Pinned Players
+                {t("pinned.heading")}
               </h3>
               <p className="text-xs text-muted-foreground/60 mt-1">
-                {isRank ? "Rank" : "Rating"} history for pinned players this season
+                {isRank ? t("pinned.rankHistory") : t("pinned.ratingHistory")}
               </p>
             </div>
             {/* Rating / Rank toggle */}
@@ -260,7 +262,7 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
                       : "text-muted-foreground hover:text-foreground hover:bg-card/80"
                   }`}
                 >
-                  {m === "rating" ? "Rating" : "Rank"}
+                  {m === "rating" ? t("chart.rating") : t("chart.rank")}
                 </button>
               ))}
             </div>
@@ -281,7 +283,7 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
             </div>
             <button
               onClick={clear}
-              title="Clear all pinned players"
+              title={t("pinned.clearAll")}
               className="p-1 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
             >
               <X className="w-4 h-4" />

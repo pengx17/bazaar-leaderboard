@@ -1,4 +1,5 @@
 import ReactECharts from "echarts-for-react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchTitleRatingHistory } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
@@ -6,6 +7,7 @@ import { useTheme } from "@/lib/theme";
 import { getChartTheme } from "@/lib/chart-theme";
 
 export function TitleRatingChart({ seasonId }: { seasonId: number }) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const ct = getChartTheme(theme);
   const { data, loading, error } = useFetch(
@@ -39,7 +41,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
     return (
       <Card className="stat-card">
         <CardContent className="p-6 text-center text-muted-foreground">
-          No title rating data available
+          {t("titleChart.noData")}
         </CardContent>
       </Card>
     );
@@ -79,7 +81,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       },
     },
     legend: {
-      data: ["Top 10", "Top 100", "Top 1000"],
+      data: [t("titleChart.top10"), t("titleChart.top100"), t("titleChart.top1000")],
       top: 4,
       right: 8,
       textStyle: {
@@ -113,7 +115,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
     },
     yAxis: {
       type: "value" as const,
-      name: "Rating",
+      name: t("chart.rating"),
       nameTextStyle: {
         color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
@@ -130,7 +132,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
     },
     series: [
       {
-        name: "Top 10",
+        name: t("titleChart.top10"),
         type: "line",
         data: data.map((d) => d.top10),
         smooth: true,
@@ -151,7 +153,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
         },
       },
       {
-        name: "Top 100",
+        name: t("titleChart.top100"),
         type: "line",
         data: data.map((d) => d.top100),
         smooth: true,
@@ -159,7 +161,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
         lineStyle: { color: lineColors.top100, width: 2 },
       },
       {
-        name: "Top 1000",
+        name: t("titleChart.top1000"),
         type: "line",
         data: data.map((d) => d.top1000),
         smooth: true,
@@ -174,10 +176,10 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       <CardContent className="p-4 pt-5">
         <div className="px-2 mb-4">
           <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-            Title Cutoff Lines
+            {t("titleChart.heading")}
           </h3>
           <p className="text-xs text-muted-foreground/60 mt-1">
-            Minimum rating to reach each title tier this season
+            {t("titleChart.description")}
           </p>
         </div>
         <ReactECharts

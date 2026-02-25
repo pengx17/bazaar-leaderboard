@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
 import { Search, ChevronLeft, ChevronRight, X, TrendingUp, TrendingDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { fetchLeaderboard } from "@/lib/api";
 import type { LeaderboardEntry } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
@@ -20,6 +21,7 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 }
 
 export function LeaderboardTable({ seasonId }: { seasonId: number }) {
+  const { t } = useTranslation();
   const [page, setPage] = useState(0);
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebouncedValue(searchInput.trim(), DEBOUNCE_MS);
@@ -100,7 +102,7 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           type="text"
-          placeholder="Search player..."
+          placeholder={t("leaderboard.searchPlaceholder")}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           className="w-full pl-10 pr-10 py-2.5 bg-card/50 border border-border/40 rounded-lg text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-colors"
@@ -119,9 +121,9 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
       <div className="rounded-lg border border-border/40 overflow-hidden">
         {/* Header */}
         <div className="grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-2.5 bg-card/30 border-b border-border/30 text-xs font-mono uppercase tracking-widest text-muted-foreground">
-          <span>Rank</span>
-          <span>Player</span>
-          <span className="text-right">Rating</span>
+          <span>{t("leaderboard.rank")}</span>
+          <span>{t("leaderboard.player")}</span>
+          <span className="text-right">{t("leaderboard.rating")}</span>
           <span />
         </div>
 
@@ -146,8 +148,8 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
         ) : !data || data.entries.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground font-mono">
             {debouncedSearch
-              ? `No players found for "${debouncedSearch}"`
-              : "No leaderboard data"}
+              ? t("leaderboard.noResults", { search: debouncedSearch })
+              : t("leaderboard.noData")}
           </div>
         ) : (
           <div className="divide-y divide-border/20">
@@ -176,8 +178,12 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-mono text-muted-foreground tabular-nums">
             {debouncedSearch
-              ? `${data?.total.toLocaleString()} results`
-              : `${(page * PAGE_SIZE + 1).toLocaleString()}–${Math.min((page + 1) * PAGE_SIZE, data?.total ?? 0).toLocaleString()} of ${data?.total.toLocaleString()}`}
+              ? t("leaderboard.results", { total: data?.total.toLocaleString() })
+              : t("leaderboard.pageInfo", {
+                  start: (page * PAGE_SIZE + 1).toLocaleString(),
+                  end: Math.min((page + 1) * PAGE_SIZE, data?.total ?? 0).toLocaleString(),
+                  total: data?.total.toLocaleString(),
+                })}
           </span>
           <div className="flex items-center gap-1">
             <button

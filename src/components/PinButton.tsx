@@ -1,4 +1,5 @@
 import { Pin, PinOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { usePinnedPlayers } from "@/lib/pinned-players";
 
 export function PinButton({
@@ -8,6 +9,7 @@ export function PinButton({
   username: string;
   size?: "sm" | "md";
 }) {
+  const { t } = useTranslation();
   const { isPinned, pin, unpin, pinned, maxPinned } = usePinnedPlayers();
   const pinned_ = isPinned(username);
   const full = pinned.length >= maxPinned && !pinned_;
@@ -26,10 +28,10 @@ export function PinButton({
       disabled={full}
       title={
         pinned_
-          ? `Unpin ${username}`
+          ? t("pin.unpin", { username })
           : full
-            ? `Max ${maxPinned} pinned players`
-            : `Pin ${username}`
+            ? t("pin.maxReached", { max: maxPinned })
+            : t("pin.pin", { username })
       }
       className={`${padding} rounded transition-colors ${
         pinned_

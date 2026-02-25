@@ -1,4 +1,5 @@
 import ReactECharts from "echarts-for-react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchRatingHistory } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
@@ -11,6 +12,7 @@ interface RatingChartProps {
 }
 
 export function RatingChart({ username, seasonId }: RatingChartProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const ct = getChartTheme(theme);
   const {
@@ -45,7 +47,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
     return (
       <Card className="stat-card">
         <CardContent className="p-6 text-center text-muted-foreground">
-          No data found for "{username}"
+          {t("chart.noData", { username })}
         </CardContent>
       </Card>
     );
@@ -79,7 +81,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
         const time = new Date(params[0].axisValueLabel).toLocaleString();
         let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
         for (const p of params) {
-          const color = p.seriesName === "Rating" ? ct.ratingAxis : ct.positionAxis;
+          const color = p.seriesName === t("chart.rating") ? ct.ratingAxis : ct.positionAxis;
           html += `<div style="display:flex;align-items:center;gap:6px">
             <span style="width:8px;height:8px;border-radius:50%;background:${color}"></span>
             <span>${p.seriesName}:</span>
@@ -113,7 +115,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
     yAxis: [
       {
         type: "value" as const,
-        name: "Rating",
+        name: t("chart.rating"),
         min: ratingMin - ratingPad,
         max: ratingMax + ratingPad,
         nameTextStyle: {
@@ -132,7 +134,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       },
       {
         type: "value" as const,
-        name: "Rank",
+        name: t("chart.rank"),
         min: Math.max(1, posMin - posPad),
         max: posMax + posPad,
         nameTextStyle: {
@@ -151,7 +153,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
     ],
     series: [
       {
-        name: "Rating",
+        name: t("chart.rating"),
         type: "line",
         data: ratings,
         yAxisIndex: 0,
@@ -176,7 +178,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
         },
       },
       {
-        name: "Position",
+        name: t("chart.position"),
         type: "line",
         data: positions,
         yAxisIndex: 1,
@@ -196,7 +198,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       <CardContent className="p-4 pt-5">
         <div className="flex items-baseline gap-3 mb-4 px-2">
           <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-            Player Tracking
+            {t("chart.playerTracking")}
           </h3>
           <span className="text-base font-bold text-foreground">{username}</span>
         </div>

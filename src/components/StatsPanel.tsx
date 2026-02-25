@@ -1,7 +1,9 @@
 import { Crown, Users, ArrowDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { StatsData } from "@/lib/api";
 
 export function StatsPanel({ stats }: { stats: StatsData }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 rounded-lg bg-card/50 border border-border/40 text-sm">
       <StatItem
@@ -13,13 +15,13 @@ export function StatsPanel({ stats }: { stats: StatsData }) {
       <Divider />
       <StatItem
         icon={<Users className="w-3.5 h-3.5 text-amber-500/60" />}
-        label="Legends"
+        label={t("stats.legends")}
         value={stats.totalEntries.toLocaleString()}
       />
       <Divider />
       <StatItem
         icon={<ArrowDown className="w-3.5 h-3.5 text-muted-foreground" />}
-        label="Floor"
+        label={t("stats.floor")}
         value={stats.bottomPlayer?.username ?? "—"}
         accent={String(stats.bottomPlayer?.rating ?? "")}
       />

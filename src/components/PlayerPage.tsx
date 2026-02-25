@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, Hash, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { RatingChart } from "@/components/RatingChart";
 import { RatingPrediction } from "@/components/RatingPrediction";
 import { PinButton } from "@/components/PinButton";
@@ -14,6 +15,7 @@ function SkeletonCard({ height }: { height: string }) {
 }
 
 export function PlayerPage({ params }: { params: { username: string } }) {
+  const { t } = useTranslation();
   const username = decodeURIComponent(params.username);
 
   // Fetch stats to get current season and available seasons
@@ -45,7 +47,7 @@ export function PlayerPage({ params }: { params: { username: string } }) {
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground font-mono mb-6 transition-colors group"
       >
         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-        Back to Leaderboard
+        {t("player.back")}
       </Link>
 
       {/* Player header */}
@@ -91,7 +93,7 @@ export function PlayerPage({ params }: { params: { username: string } }) {
           {seasons.length > 1 && (
             <div className="flex items-center gap-1 ml-auto">
               <span className="text-xs text-muted-foreground font-mono mr-1">
-                Season
+                {t("player.season")}
               </span>
               {seasons.map((s) => (
                 <button
@@ -125,7 +127,7 @@ export function PlayerPage({ params }: { params: { username: string } }) {
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1 h-5 bg-amber-500/60 rounded-sm" />
           <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-            Rating &amp; Rank History
+            {t("player.ratingHistory")}
           </h2>
         </div>
         {activeSeason != null ? (
