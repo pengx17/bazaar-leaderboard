@@ -57,7 +57,7 @@ function computePrediction(
 
   const latest = history[history.length - 1];
   const sessions = extractGameSessions(history);
-  const MIN_SESSIONS = 5;
+  const MIN_SESSIONS = 10;
   if (sessions.length < MIN_SESSIONS) return null;
 
   // Use the most recent 30 sessions to reflect current skill level
@@ -175,7 +175,7 @@ export function RatingPrediction({
   const noThreshold = !insufficientHistory && nextTier != null && tierThreshold == null;
 
   // Check if we have enough game sessions (rating changes) to predict
-  const MIN_SESSIONS = 5;
+  const MIN_SESSIONS = 10;
   const gameSessions = history ? extractGameSessions(history) : [];
   const fewGames =
     !insufficientHistory && !isNaN(gameSessions.length) && gameSessions.length < MIN_SESSIONS;

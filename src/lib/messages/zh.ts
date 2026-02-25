@@ -83,7 +83,7 @@ export default {
   "prediction.noHistory":
     "需要至少 2 个分数快照才能预测。数据每 30 分钟采集一次，请稍后再看。",
   "prediction.fewGames":
-    "需要至少 5 场有效对局（分数有变化）才能预测，继续加油！",
+    "需要至少 10 场有效对局才能预测，继续加油！",
   "prediction.noThreshold": "本赛季的段位门槛数据暂不可用。",
 
   // ThemeToggle
