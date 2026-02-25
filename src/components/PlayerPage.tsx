@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, Hash, Zap } from "lucide-react";
 import { RatingChart } from "@/components/RatingChart";
+import { RatingPrediction } from "@/components/RatingPrediction";
 import { PinButton } from "@/components/PinButton";
 import { fetchStats, fetchLeaderboard } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
@@ -96,6 +97,13 @@ export function PlayerPage({ params }: { params: { username: string } }) {
           )}
         </div>
       </div>
+
+      {/* Prediction */}
+      {activeSeason != null && (
+        <section className="mb-6">
+          <RatingPrediction username={username} seasonId={activeSeason} />
+        </section>
+      )}
 
       {/* Rating chart */}
       {activeSeason != null && (
