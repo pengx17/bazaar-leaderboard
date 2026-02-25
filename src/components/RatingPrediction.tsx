@@ -57,22 +57,13 @@ function computePrediction(
   const sessions = extractGameSessions(history);
   if (sessions.length === 0) return null;
 
-  // Use recent-tier sessions (R >= 70% of current) for more relevant stats
-  const tierThreshold = latest.rating * 0.7;
-  const recentTierSessions: GameSession[] = [];
-  for (let i = 1; i < history.length; i++) {
-    const dr = history[i].rating - history[i - 1].rating;
-    const r = history[i - 1].rating;
-    if (dr === 0 || r < tierThreshold) continue;
-
-    const wRaw = dr / 5 + r / 100;
-    const is10Win = wRaw > 10;
-    const wins = is10Win ? (dr - 5) / 5 + r / 100 : wRaw;
-    recentTierSessions.push({ wins, is10Win });
-  }
-
+  // Use the most recent 30 sessions to reflect current skill level,
+  // rather than a rating threshold which mixes in older, weaker play.
+  const RECENT_COUNT = 30;
   const gameSessions =
-    recentTierSessions.length >= 10 ? recentTierSessions : sessions;
+    sessions.length > RECENT_COUNT
+      ? sessions.slice(-RECENT_COUNT)
+      : sessions;
 
   const avgWins =
     gameSessions.reduce((s, g) => s + g.wins, 0) / gameSessions.length;
