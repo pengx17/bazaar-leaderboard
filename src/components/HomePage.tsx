@@ -3,7 +3,7 @@ import { StatsPanel } from "@/components/StatsPanel";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { TitleRatingChart } from "@/components/TitleRatingChart";
 import { PinnedPlayersChart } from "@/components/PinnedPlayersChart";
-import { fetchStats } from "@/lib/api";
+import { fetchStats, formatSeasonName } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
 export function HomePage() {
@@ -23,7 +23,7 @@ export function HomePage() {
         </div>
         <p className="text-sm text-muted-foreground font-mono ml-5 tracking-wide">
           {seasonId != null
-            ? t("home.subtitleSeason", { seasonId })
+            ? t("home.subtitleSeason", { season: formatSeasonName(seasonId) })
             : t("home.subtitle")}
         </p>
       </header>

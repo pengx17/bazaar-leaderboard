@@ -6,7 +6,7 @@ export default {
   // HomePage
   "home.title": "The Bazaar",
   "home.subtitle": "传奇排行榜追踪器",
-  "home.subtitleSeason": "传奇排行榜追踪器 — 第 {{seasonId}} 赛季",
+  "home.subtitleSeason": "传奇排行榜追踪器 — {{season}}",
   "home.noData": "暂无数据",
   "home.leaderboard": "排行榜",
   "home.titleThresholds": "段位门槛",

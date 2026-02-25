@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { RatingChart } from "@/components/RatingChart";
 import { RatingPrediction } from "@/components/RatingPrediction";
 import { PinButton } from "@/components/PinButton";
-import { fetchStats, fetchLeaderboard } from "@/lib/api";
+import { fetchStats, fetchLeaderboard, formatSeasonName } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
 function SkeletonCard({ height }: { height: string }) {
@@ -105,7 +105,7 @@ export function PlayerPage({ params }: { params: { username: string } }) {
                       : "text-muted-foreground hover:text-foreground hover:bg-card/80 border border-border/30"
                   }`}
                 >
-                  {s}
+                  {formatSeasonName(s)}
                 </button>
               ))}
             </div>

@@ -6,7 +6,7 @@ export default {
   // HomePage
   "home.title": "The Bazaar",
   "home.subtitle": "LEGENDARY LEADERBOARD TRACKER",
-  "home.subtitleSeason": "LEGENDARY LEADERBOARD TRACKER — SEASON {{seasonId}}",
+  "home.subtitleSeason": "LEGENDARY LEADERBOARD TRACKER — {{season}}",
   "home.noData": "No data available",
   "home.leaderboard": "Leaderboard",
   "home.titleThresholds": "Title Thresholds",

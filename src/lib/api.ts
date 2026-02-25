@@ -37,6 +37,14 @@ export interface LeaderboardData {
   entries: LeaderboardEntry[];
 }
 
+/**
+ * Season ID 1 = Beta, ID 2 = Season 1, ID 3 = Season 2, etc.
+ */
+export function formatSeasonName(seasonId: number): string {
+  if (seasonId === 1) return "Beta";
+  return `S${seasonId - 1}`;
+}
+
 export async function fetchLeaderboard(opts: {
   seasonId?: number;
   limit?: number;
