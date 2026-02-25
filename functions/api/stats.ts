@@ -71,38 +71,80 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       .first<{ username: string; rating: number; position: number }>();
 
     // Daily change: compare top player's current rating vs ~24h ago
+    // Find a snapshot from ~24h ago (skip single-player imports)
+    const oldSnapshot = await db
+      .prepare(
+        `SELECT id FROM snapshots
+         WHERE season_id = ?
+           AND total_entries > 1
+           AND fetched_at <= datetime(?, '-1 day')
+         ORDER BY fetched_at DESC
+         LIMIT 1`
+      )
+      .bind(seasonId, latestSnapshot.fetched_at)
+      .first<{ id: number }>();
+
     let dailyTopChange: number | null = null;
 
-    if (topPlayer) {
-      const oneDayAgo = new Date(
-        new Date(latestSnapshot.fetched_at).getTime() - 24 * 60 * 60 * 1000
-      ).toISOString();
-
-      // Find the snapshot closest to 24h ago
-      const oldSnapshot = await db
+    if (topPlayer && oldSnapshot) {
+      const oldEntry = await db
         .prepare(
-          `SELECT id FROM snapshots
-           WHERE season_id = ? AND fetched_at <= ?
-           ORDER BY fetched_at DESC
+          `SELECT rating FROM entries
+           WHERE snapshot_id = ? AND username = ?`
+        )
+        .bind(oldSnapshot.id, topPlayer.username)
+        .first<{ rating: number }>();
+
+      if (oldEntry) {
+        dailyTopChange = topPlayer.rating - oldEntry.rating;
+      }
+    }
+
+    // 24h movers: biggest rating gain, biggest rating drop, biggest rank climb
+    type MoverRow = { username: string; rating: number; delta: number };
+    let biggestGainer: MoverRow | null = null;
+    let biggestLoser: MoverRow | null = null;
+    let biggestClimber: { username: string; rating: number; positionDelta: number } | null = null;
+
+    if (oldSnapshot) {
+      const gainerResult = await db
+        .prepare(
+          `SELECT e.username, e.rating, (e.rating - p.rating) AS delta
+           FROM entries e
+           JOIN entries p ON p.snapshot_id = ? AND p.username = e.username
+           WHERE e.snapshot_id = ?
+           ORDER BY delta DESC
            LIMIT 1`
         )
-        .bind(seasonId, oneDayAgo)
-        .first<{ id: number }>();
+        .bind(oldSnapshot.id, latestSnapshot.id)
+        .first<MoverRow>();
+      if (gainerResult && gainerResult.delta > 0) biggestGainer = gainerResult;
 
-      if (oldSnapshot) {
-        // Look up the same user's rating in that older snapshot
-        const oldEntry = await db
-          .prepare(
-            `SELECT rating FROM entries
-             WHERE snapshot_id = ? AND username = ?`
-          )
-          .bind(oldSnapshot.id, topPlayer.username)
-          .first<{ rating: number }>();
+      const loserResult = await db
+        .prepare(
+          `SELECT e.username, e.rating, (e.rating - p.rating) AS delta
+           FROM entries e
+           JOIN entries p ON p.snapshot_id = ? AND p.username = e.username
+           WHERE e.snapshot_id = ?
+           ORDER BY delta ASC
+           LIMIT 1`
+        )
+        .bind(oldSnapshot.id, latestSnapshot.id)
+        .first<MoverRow>();
+      if (loserResult && loserResult.delta < 0) biggestLoser = loserResult;
 
-        if (oldEntry) {
-          dailyTopChange = topPlayer.rating - oldEntry.rating;
-        }
-      }
+      const climberResult = await db
+        .prepare(
+          `SELECT e.username, e.rating, (p.position - e.position) AS positionDelta
+           FROM entries e
+           JOIN entries p ON p.snapshot_id = ? AND p.username = e.username
+           WHERE e.snapshot_id = ?
+           ORDER BY positionDelta DESC
+           LIMIT 1`
+        )
+        .bind(oldSnapshot.id, latestSnapshot.id)
+        .first<{ username: string; rating: number; positionDelta: number }>();
+      if (climberResult && climberResult.positionDelta > 0) biggestClimber = climberResult;
     }
 
     // Get all seasons that have data
@@ -124,6 +166,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         totalEntries: latestSnapshot.total_entries,
         dailyTopChange,
         snapshotTime: latestSnapshot.fetched_at,
+        biggestGainer: biggestGainer
+          ? { username: biggestGainer.username, rating: biggestGainer.rating, delta: biggestGainer.delta }
+          : null,
+        biggestLoser: biggestLoser
+          ? { username: biggestLoser.username, rating: biggestLoser.rating, delta: biggestLoser.delta }
+          : null,
+        biggestClimber: biggestClimber
+          ? { username: biggestClimber.username, rating: biggestClimber.rating, positionDelta: biggestClimber.positionDelta }
+          : null,
       },
       { headers: corsHeaders }
     );

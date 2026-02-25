@@ -12,6 +12,9 @@ export default {
   "home.titleThresholds": "Title Thresholds",
 
   // StatsPanel
+  "stats.hotStreak": "Hot",
+  "stats.coldStreak": "Cold",
+  "stats.climber": "Climber",
 
   // LeaderboardTable
   "leaderboard.searchPlaceholder": "Search player...",

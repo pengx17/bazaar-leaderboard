@@ -8,6 +8,9 @@ export interface StatsData {
   totalEntries: number;
   dailyTopChange: number | null;
   snapshotTime: string;
+  biggestGainer: { username: string; rating: number; delta: number } | null;
+  biggestLoser: { username: string; rating: number; delta: number } | null;
+  biggestClimber: { username: string; rating: number; positionDelta: number } | null;
 }
 
 export interface RatingHistoryPoint {

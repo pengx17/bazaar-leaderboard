@@ -12,6 +12,9 @@ export default {
   "home.titleThresholds": "段位门槛",
 
   // StatsPanel
+  "stats.hotStreak": "飙升",
+  "stats.coldStreak": "暴跌",
+  "stats.climber": "飞升",
 
   // LeaderboardTable
   "leaderboard.searchPlaceholder": "搜索玩家...",
