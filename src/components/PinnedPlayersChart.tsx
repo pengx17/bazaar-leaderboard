@@ -122,21 +122,29 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
 
   // Build series: for each player, map values to the unified time axis
   const isRank = metric === "rank";
+  const allValues: number[] = [];
   const series = state.players.map((p, i) => {
     const valueByTime = new Map(
       p.history.map((h) => [h.time, isRank ? h.position : h.rating])
     );
     const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
+    const data = times.map((t) => valueByTime.get(t) ?? null);
+    for (const v of data) if (v != null) allValues.push(v);
     return {
       name: p.username,
       type: "line" as const,
-      data: times.map((t) => valueByTime.get(t) ?? null),
+      data,
       smooth: true,
       symbol: "none",
       connectNulls: true,
       lineStyle: { color, width: 2 },
     };
   });
+
+  // Compute axis range with ~10% padding
+  const valMin = allValues.length > 0 ? Math.min(...allValues) : 0;
+  const valMax = allValues.length > 0 ? Math.max(...allValues) : 100;
+  const valPad = Math.max(Math.round((valMax - valMin) * 0.1), 1);
 
   const option = {
     backgroundColor: "transparent",
@@ -208,6 +216,8 @@ export function PinnedPlayersChart({ seasonId }: { seasonId: number }) {
       type: "value" as const,
       name: isRank ? "Rank" : "Rating",
       inverse: isRank,
+      min: isRank ? Math.max(1, valMin - valPad) : valMin - valPad,
+      max: valMax + valPad,
       nameTextStyle: {
         color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",

@@ -55,6 +55,15 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
   const ratings = data.map((d) => d.rating);
   const positions = data.map((d) => d.position);
 
+  // Compute axis ranges with ~10% padding to compress the view
+  const ratingMin = Math.min(...ratings);
+  const ratingMax = Math.max(...ratings);
+  const ratingPad = Math.max(Math.round((ratingMax - ratingMin) * 0.1), 5);
+
+  const posMin = Math.min(...positions);
+  const posMax = Math.max(...positions);
+  const posPad = Math.max(Math.round((posMax - posMin) * 0.1), 1);
+
   const option = {
     backgroundColor: "transparent",
     tooltip: {
@@ -105,6 +114,8 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       {
         type: "value" as const,
         name: "Rating",
+        min: ratingMin - ratingPad,
+        max: ratingMax + ratingPad,
         nameTextStyle: {
           color: ct.ratingAxis,
           fontFamily: "JetBrains Mono, monospace",
@@ -121,7 +132,9 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       },
       {
         type: "value" as const,
-        name: "Position",
+        name: "Rank",
+        min: Math.max(1, posMin - posPad),
+        max: posMax + posPad,
         nameTextStyle: {
           color: ct.positionAxis,
           fontFamily: "JetBrains Mono, monospace",
