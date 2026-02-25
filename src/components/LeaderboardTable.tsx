@@ -120,10 +120,12 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
       {/* Table */}
       <div className="rounded-lg border border-border/40 overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-2.5 bg-card/30 border-b border-border/30 text-xs font-mono uppercase tracking-widest text-muted-foreground">
+        <div className={`${ROW_GRID} items-center px-4 py-2.5 bg-card/30 border-b border-border/30 text-xs font-mono uppercase tracking-widest text-muted-foreground`}>
           <span>{t("leaderboard.rank")}</span>
+          <span />
           <span>{t("leaderboard.player")}</span>
           <span className="text-right">{t("leaderboard.rating")}</span>
+          <span />
           <span />
         </div>
 
@@ -133,11 +135,14 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
             {[...Array(10)].map((_, i) => (
               <div
                 key={i}
-                className="grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-3 animate-pulse"
+                className={`${ROW_GRID} items-center px-4 py-3 animate-pulse`}
               >
                 <div className="h-4 bg-white/5 rounded w-8" />
+                <div />
                 <div className="h-4 bg-white/5 rounded w-32" />
                 <div className="h-4 bg-white/5 rounded w-12 ml-auto" />
+                <div />
+                <div />
               </div>
             ))}
           </div>
@@ -217,7 +222,7 @@ function ChangeIndicator({ value }: { value: number | null }) {
   const positive = value > 0;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 text-[10px] font-mono tabular-nums ${
+      className={`inline-flex items-center gap-0.5 text-[11px] font-mono tabular-nums ${
         positive ? "text-emerald-500" : "text-red-400"
       }`}
     >
@@ -231,6 +236,8 @@ function ChangeIndicator({ value }: { value: number | null }) {
   );
 }
 
+const ROW_GRID = "grid grid-cols-[3.5rem_4rem_1fr_4.5rem_4rem_2rem] sm:grid-cols-[4.5rem_5rem_1fr_5.5rem_5rem_2.5rem]";
+
 function LeaderboardRow({
   entry,
   pinned,
@@ -241,20 +248,20 @@ function LeaderboardRow({
   return (
     <Link
       href={`/player/${encodeURIComponent(entry.username)}`}
-      className={`grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-baseline px-4 py-2.5 transition-colors cursor-pointer group ${
+      className={`${ROW_GRID} items-center px-4 py-2.5 transition-colors cursor-pointer group ${
         pinned
           ? "hover:bg-amber-500/[0.06]"
           : "hover:bg-amber-500/[0.04]"
       }`}
     >
       {/* Rank */}
-      <span className="font-mono text-sm font-medium tabular-nums text-foreground/70 leading-tight">
-        {entry.position}
-        {entry.positionChange != null && entry.positionChange !== 0 && (
-          <span className="block">
-            <ChangeIndicator value={entry.positionChange} />
-          </span>
-        )}
+      <span className="font-mono text-sm font-medium tabular-nums text-foreground/70">
+        {entry.position.toLocaleString()}
+      </span>
+
+      {/* Rank delta */}
+      <span>
+        <ChangeIndicator value={entry.positionChange} />
       </span>
 
       {/* Player name */}
@@ -263,13 +270,13 @@ function LeaderboardRow({
       </span>
 
       {/* Rating */}
-      <span className="text-right font-mono text-sm font-medium tabular-nums text-foreground/70 leading-tight">
+      <span className="text-right font-mono text-sm font-medium tabular-nums text-foreground/70">
         {entry.rating.toLocaleString()}
-        {entry.ratingChange != null && entry.ratingChange !== 0 && (
-          <span className="block">
-            <ChangeIndicator value={entry.ratingChange} />
-          </span>
-        )}
+      </span>
+
+      {/* Rating delta */}
+      <span className="text-right">
+        <ChangeIndicator value={entry.ratingChange} />
       </span>
 
       {/* Pin */}
