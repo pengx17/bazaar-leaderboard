@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
 import { Search, ChevronLeft, ChevronRight, Trophy, X } from "lucide-react";
 import { fetchLeaderboard } from "@/lib/api";
 import type { LeaderboardEntry } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { PinButton } from "@/components/PinButton";
+import { usePinnedPlayers } from "@/lib/pinned-players";
 
 const PAGE_SIZE = 50;
 const DEBOUNCE_MS = 300;
@@ -23,6 +24,7 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebouncedValue(searchInput.trim(), DEBOUNCE_MS);
   const prevSearchRef = useRef(debouncedSearch);
+  const { pinned } = usePinnedPlayers();
 
   // Reset page to 0 when search term changes
   useEffect(() => {
@@ -41,6 +43,45 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
         search: debouncedSearch || undefined,
       }),
     [seasonId, page, debouncedSearch]
+  );
+
+  // Fetch pinned players' entries (only when not searching)
+  const pinnedKey = pinned.join(",");
+  const showPinned = pinned.length > 0 && !debouncedSearch;
+  const { data: pinnedEntries } = useFetch(
+    () =>
+      showPinned
+        ? Promise.all(
+            pinned.map(async (username) => {
+              const result = await fetchLeaderboard({
+                seasonId,
+                search: username,
+                limit: 1,
+              });
+              return (
+                result.entries.find(
+                  (e) => e.username.toLowerCase() === username.toLowerCase()
+                ) ?? null
+              );
+            })
+          ).then((entries) =>
+            entries.filter((e): e is LeaderboardEntry => e !== null)
+          )
+        : Promise.resolve([]),
+    [seasonId, pinnedKey, debouncedSearch]
+  );
+
+  // Deduplicate: remove pinned players from regular rows
+  const pinnedUsernames = useMemo(
+    () => new Set((pinnedEntries ?? []).map((e) => e.username.toLowerCase())),
+    [pinnedEntries]
+  );
+  const regularEntries = useMemo(
+    () =>
+      data?.entries.filter(
+        (e) => !pinnedUsernames.has(e.username.toLowerCase())
+      ) ?? [],
+    [data?.entries, pinnedUsernames]
   );
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
@@ -108,7 +149,20 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
           </div>
         ) : (
           <div className="divide-y divide-border/20">
-            {data.entries.map((entry) => (
+            {/* Pinned rows */}
+            {showPinned && pinnedEntries && pinnedEntries.length > 0 && (
+              <div className="divide-y divide-amber-500/10 bg-amber-500/[0.03] border-b border-amber-500/20">
+                {pinnedEntries.map((entry) => (
+                  <LeaderboardRow
+                    key={`pinned-${entry.username}`}
+                    entry={entry}
+                    pinned
+                  />
+                ))}
+              </div>
+            )}
+            {/* Regular rows */}
+            {regularEntries.map((entry) => (
               <LeaderboardRow key={`${entry.position}-${entry.username}`} entry={entry} />
             ))}
           </div>
@@ -150,7 +204,13 @@ export function LeaderboardTable({ seasonId }: { seasonId: number }) {
   );
 }
 
-function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
+function LeaderboardRow({
+  entry,
+  pinned,
+}: {
+  entry: LeaderboardEntry;
+  pinned?: boolean;
+}) {
   const isTop3 = entry.position <= 3;
   const isTop10 = entry.position <= 10;
   const isTop100 = entry.position <= 100;
@@ -158,7 +218,11 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
   return (
     <Link
       href={`/player/${encodeURIComponent(entry.username)}`}
-      className="grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-2.5 hover:bg-amber-500/[0.04] transition-colors cursor-pointer group"
+      className={`grid grid-cols-[4rem_1fr_6rem_2rem] sm:grid-cols-[5rem_1fr_8rem_2.5rem] items-center px-4 py-2.5 transition-colors cursor-pointer group ${
+        pinned
+          ? "hover:bg-amber-500/[0.06]"
+          : "hover:bg-amber-500/[0.04]"
+      }`}
     >
       {/* Rank */}
       <span className="flex items-center gap-1.5">
@@ -209,7 +273,9 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
       </span>
 
       {/* Pin */}
-      <span className="flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+      <span className={`flex justify-center transition-opacity ${
+        pinned ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      }`}>
         <PinButton username={entry.username} size="sm" />
       </span>
     </Link>
