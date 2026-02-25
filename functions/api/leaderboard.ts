@@ -53,10 +53,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
 
     // Find a snapshot from ~24h ago to compute deltas
+    // Skip snapshots with very few entries (e.g. old single-player imports)
     const prevSnapshot = await db
       .prepare(
         `SELECT id FROM snapshots
          WHERE season_id = ?
+           AND total_entries > 1
            AND fetched_at <= datetime((SELECT fetched_at FROM snapshots WHERE id = ?), '-1 day')
          ORDER BY fetched_at DESC
          LIMIT 1`

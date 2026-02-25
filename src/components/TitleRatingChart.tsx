@@ -47,7 +47,19 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
     );
   }
 
-  const times = data.map((d) => d.time);
+  // Forward-fill: carry last known value when a field is null
+  const filled = data.reduce<typeof data>((acc, d) => {
+    const prev = acc.length > 0 ? acc[acc.length - 1] : null;
+    acc.push({
+      time: d.time,
+      top10: d.top10 ?? prev?.top10 ?? null,
+      top100: d.top100 ?? prev?.top100 ?? null,
+      top1000: d.top1000 ?? prev?.top1000 ?? null,
+    });
+    return acc;
+  }, []);
+
+  const times = filled.map((d) => d.time);
 
   const lineColors = {
     top10: "#f59e0b",
@@ -134,7 +146,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       {
         name: t("titleChart.top10"),
         type: "line",
-        data: data.map((d) => d.top10),
+        data: filled.map((d) => d.top10),
         smooth: true,
         symbol: "none",
         lineStyle: { color: lineColors.top10, width: 2 },
@@ -155,7 +167,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       {
         name: t("titleChart.top100"),
         type: "line",
-        data: data.map((d) => d.top100),
+        data: filled.map((d) => d.top100),
         smooth: true,
         symbol: "none",
         lineStyle: { color: lineColors.top100, width: 2 },
@@ -163,7 +175,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       {
         name: t("titleChart.top1000"),
         type: "line",
-        data: data.map((d) => d.top1000),
+        data: filled.map((d) => d.top1000),
         smooth: true,
         symbol: "none",
         lineStyle: { color: lineColors.top1000, width: 2 },
