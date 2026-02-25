@@ -2,6 +2,8 @@ import ReactECharts from "echarts-for-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchRatingHistory } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
+import { useTheme } from "@/lib/theme";
+import { getChartTheme } from "@/lib/chart-theme";
 
 interface RatingChartProps {
   username: string;
@@ -9,6 +11,8 @@ interface RatingChartProps {
 }
 
 export function RatingChart({ username, seasonId }: RatingChartProps) {
+  const { theme } = useTheme();
+  const ct = getChartTheme(theme);
   const {
     data,
     loading,
@@ -55,18 +59,18 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
     backgroundColor: "transparent",
     tooltip: {
       trigger: "axis" as const,
-      backgroundColor: "rgba(10, 10, 10, 0.95)",
-      borderColor: "rgba(245, 158, 11, 0.2)",
+      backgroundColor: ct.tooltipBg,
+      borderColor: ct.tooltipBorder,
       textStyle: {
-        color: "#e5e5e5",
+        color: ct.tooltipText,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 12,
       },
       formatter: (params: Array<{ seriesName: string; value: number; axisValueLabel: string }>) => {
         const time = new Date(params[0].axisValueLabel).toLocaleString();
-        let html = `<div style="font-size:11px;color:#888;margin-bottom:4px">${time}</div>`;
+        let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
         for (const p of params) {
-          const color = p.seriesName === "Rating" ? "#f59e0b" : "#6ee7b7";
+          const color = p.seriesName === "Rating" ? ct.ratingAxis : ct.positionAxis;
           html += `<div style="display:flex;align-items:center;gap:6px">
             <span style="width:8px;height:8px;border-radius:50%;background:${color}"></span>
             <span>${p.seriesName}:</span>
@@ -86,7 +90,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
       type: "category" as const,
       data: times,
       axisLabel: {
-        color: "#666",
+        color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 10,
         formatter: (value: string) => {
@@ -94,7 +98,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
           return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
         },
       },
-      axisLine: { lineStyle: { color: "#333" } },
+      axisLine: { lineStyle: { color: ct.axisLine } },
       splitLine: { show: false },
     },
     yAxis: [
@@ -102,29 +106,29 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
         type: "value" as const,
         name: "Rating",
         nameTextStyle: {
-          color: "#f59e0b",
+          color: ct.ratingAxis,
           fontFamily: "JetBrains Mono, monospace",
           fontSize: 11,
         },
         axisLabel: {
-          color: "#f59e0b",
+          color: ct.ratingAxis,
           fontFamily: "JetBrains Mono, monospace",
           fontSize: 10,
         },
         splitLine: {
-          lineStyle: { color: "rgba(245, 158, 11, 0.06)" },
+          lineStyle: { color: ct.ratingSplitLine },
         },
       },
       {
         type: "value" as const,
         name: "Position",
         nameTextStyle: {
-          color: "#6ee7b7",
+          color: ct.positionAxis,
           fontFamily: "JetBrains Mono, monospace",
           fontSize: 11,
         },
         axisLabel: {
-          color: "#6ee7b7",
+          color: ct.positionAxis,
           fontFamily: "JetBrains Mono, monospace",
           fontSize: 10,
         },
@@ -141,7 +145,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
         smooth: true,
         symbol: "none",
         lineStyle: {
-          color: "#f59e0b",
+          color: ct.ratingAxis,
           width: 2,
         },
         areaStyle: {
@@ -152,8 +156,8 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: "rgba(245, 158, 11, 0.15)" },
-              { offset: 1, color: "rgba(245, 158, 11, 0)" },
+              { offset: 0, color: ct.ratingAxis + "26" },
+              { offset: 1, color: ct.ratingAxis + "00" },
             ],
           },
         },
@@ -166,7 +170,7 @@ export function RatingChart({ username, seasonId }: RatingChartProps) {
         smooth: true,
         symbol: "none",
         lineStyle: {
-          color: "#6ee7b7",
+          color: ct.positionAxis,
           width: 2,
           type: "dashed" as const,
         },

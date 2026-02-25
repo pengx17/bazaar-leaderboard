@@ -2,8 +2,12 @@ import ReactECharts from "echarts-for-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { fetchTitleRatingHistory } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
+import { useTheme } from "@/lib/theme";
+import { getChartTheme } from "@/lib/chart-theme";
 
 export function TitleRatingChart({ seasonId }: { seasonId: number }) {
+  const { theme } = useTheme();
+  const ct = getChartTheme(theme);
   const { data, loading, error } = useFetch(
     () => fetchTitleRatingHistory(seasonId),
     [seasonId]
@@ -53,16 +57,16 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
     backgroundColor: "transparent",
     tooltip: {
       trigger: "axis" as const,
-      backgroundColor: "rgba(10, 10, 10, 0.95)",
-      borderColor: "rgba(245, 158, 11, 0.2)",
+      backgroundColor: ct.tooltipBg,
+      borderColor: ct.tooltipBorder,
       textStyle: {
-        color: "#e5e5e5",
+        color: ct.tooltipText,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 12,
       },
       formatter: (params: Array<{ seriesName: string; value: number | null; axisValueLabel: string; color: string }>) => {
         const time = new Date(params[0].axisValueLabel).toLocaleString();
-        let html = `<div style="font-size:11px;color:#888;margin-bottom:4px">${time}</div>`;
+        let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
         for (const p of params) {
           if (p.value == null) continue;
           html += `<div style="display:flex;align-items:center;gap:6px">
@@ -79,7 +83,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       top: 4,
       right: 8,
       textStyle: {
-        color: "#888",
+        color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 11,
       },
@@ -96,7 +100,7 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
       type: "category" as const,
       data: times,
       axisLabel: {
-        color: "#666",
+        color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 10,
         formatter: (value: string) => {
@@ -104,24 +108,24 @@ export function TitleRatingChart({ seasonId }: { seasonId: number }) {
           return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
         },
       },
-      axisLine: { lineStyle: { color: "#333" } },
+      axisLine: { lineStyle: { color: ct.axisLine } },
       splitLine: { show: false },
     },
     yAxis: {
       type: "value" as const,
       name: "Rating",
       nameTextStyle: {
-        color: "#888",
+        color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 11,
       },
       axisLabel: {
-        color: "#888",
+        color: ct.axisLabel,
         fontFamily: "JetBrains Mono, monospace",
         fontSize: 10,
       },
       splitLine: {
-        lineStyle: { color: "rgba(255, 255, 255, 0.04)" },
+        lineStyle: { color: ct.splitLine },
       },
     },
     series: [
