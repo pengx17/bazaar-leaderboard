@@ -4,14 +4,46 @@ import { fetchRatingHistory, fetchTitleRatingHistory } from "@/lib/api";
 import type { RatingHistoryPoint } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
+/**
+ * Rating formula:
+ *   Non-10-win: ΔR = 5(W − R/100)
+ *   10-win:     ΔR = 5(W − R/100) + 5
+ *
+ * From a rating change ΔR at rating R, we can back-calculate wins:
+ *   W = ΔR/5 + R/100  (if W ≤ 10)
+ *   W = (ΔR−5)/5 + R/100  (if 10-win)
+ */
+
+interface GameSession {
+  wins: number;
+  is10Win: boolean;
+}
+
 interface PredictionResult {
   currentRating: number;
   currentPosition: number;
   targetRating: number;
   ratingGap: number;
-  avgGainPerGame: number;
-  estimatedGames: number;
+  equilibriumRating: number;
+  estimatedGames: number | null; // null = can't reach
   totalGamesPlayed: number;
+  avgWins: number;
+  tenWinRate: number;
+}
+
+function extractGameSessions(history: RatingHistoryPoint[]): GameSession[] {
+  const sessions: GameSession[] = [];
+  for (let i = 1; i < history.length; i++) {
+    const dr = history[i].rating - history[i - 1].rating;
+    const r = history[i - 1].rating;
+    if (dr === 0) continue;
+
+    const wRaw = dr / 5 + r / 100;
+    const is10Win = wRaw > 10;
+    const wins = is10Win ? (dr - 5) / 5 + r / 100 : wRaw;
+    sessions.push({ wins, is10Win });
+  }
+  return sessions;
 }
 
 function computePrediction(
@@ -21,35 +53,75 @@ function computePrediction(
   if (history.length < 2) return null;
 
   const latest = history[history.length - 1];
+  const sessions = extractGameSessions(history);
+  if (sessions.length === 0) return null;
 
-  // Find all "steps" where rating changed between consecutive snapshots.
-  // Each step ≈ 1 game session (could be multiple games, but best approximation).
-  let totalGain = 0;
-  let gameCount = 0;
-
+  // Use recent-tier sessions (R >= 70% of current) for more relevant stats
+  const tierThreshold = latest.rating * 0.7;
+  const recentTierSessions: GameSession[] = [];
   for (let i = 1; i < history.length; i++) {
-    const diff = history[i].rating - history[i - 1].rating;
-    if (diff !== 0) {
-      totalGain += diff;
-      gameCount++;
-    }
+    const dr = history[i].rating - history[i - 1].rating;
+    const r = history[i - 1].rating;
+    if (dr === 0 || r < tierThreshold) continue;
+
+    const wRaw = dr / 5 + r / 100;
+    const is10Win = wRaw > 10;
+    const wins = is10Win ? (dr - 5) / 5 + r / 100 : wRaw;
+    recentTierSessions.push({ wins, is10Win });
   }
 
-  if (gameCount === 0) return null;
+  const gameSessions =
+    recentTierSessions.length >= 10 ? recentTierSessions : sessions;
 
-  const avgGainPerGame = totalGain / gameCount;
-  if (avgGainPerGame <= 0) return null;
+  const avgWins =
+    gameSessions.reduce((s, g) => s + g.wins, 0) / gameSessions.length;
+  const tenWinRate =
+    gameSessions.filter((g) => g.is10Win).length / gameSessions.length;
 
-  const ratingGap = top1000Rating - latest.rating;
+  // Equilibrium: E[ΔR] = 0 when 5(avgW − R/100) + 5·p10 = 0
+  // => R_eq = 100·avgW + 100·p10
+  const equilibriumRating = Math.round(100 * avgWins + 100 * tenWinRate);
+
+  const ratingGap = Math.max(0, top1000Rating - latest.rating);
+
+  // Simulate from current rating using per-game W distribution
+  let estimatedGames: number | null = null;
+  if (latest.position <= 1000 || ratingGap === 0) {
+    estimatedGames = 0;
+  } else {
+    let r = latest.rating;
+    let games = 0;
+    const maxGames = 2000;
+    while (r < top1000Rating && games < maxGames) {
+      // Expected ΔR using the actual W distribution
+      let totalDr = 0;
+      for (const g of gameSessions) {
+        totalDr += 5 * (g.wins - r / 100) + (g.is10Win ? 5 : 0);
+      }
+      const expectedDr = totalDr / gameSessions.length;
+      if (expectedDr <= 0.05) {
+        // Rating stalls before reaching target
+        estimatedGames = null;
+        break;
+      }
+      r += expectedDr;
+      games++;
+    }
+    if (r >= top1000Rating) {
+      estimatedGames = games;
+    }
+  }
 
   return {
     currentRating: latest.rating,
     currentPosition: latest.position,
     targetRating: top1000Rating,
-    ratingGap: Math.max(0, ratingGap),
-    avgGainPerGame,
-    estimatedGames: ratingGap > 0 ? Math.ceil(ratingGap / avgGainPerGame) : 0,
-    totalGamesPlayed: gameCount,
+    ratingGap,
+    equilibriumRating,
+    estimatedGames,
+    totalGamesPlayed: sessions.length,
+    avgWins,
+    tenWinRate,
   };
 }
 
@@ -80,7 +152,6 @@ export function RatingPrediction({
 
   if (!history || !titleHistory || history.length < 2) return null;
 
-  // Get latest top-1000 threshold
   const latestTitle = titleHistory[titleHistory.length - 1];
   if (!latestTitle?.top1000) return null;
 
@@ -108,7 +179,7 @@ export function RatingPrediction({
               Current rank: #{prediction.currentPosition.toLocaleString()}
             </p>
           </div>
-        ) : (
+        ) : prediction.estimatedGames != null ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-2">
             <StatBlock
               label="Rating Gap"
@@ -116,9 +187,9 @@ export function RatingPrediction({
               sub={`Target: ${prediction.targetRating.toLocaleString()}`}
             />
             <StatBlock
-              label="Avg Gain / Game"
-              value={`+${prediction.avgGainPerGame.toFixed(1)}`}
-              sub={`Over ${prediction.totalGamesPlayed} games`}
+              label="Avg Wins / Game"
+              value={prediction.avgWins.toFixed(1)}
+              sub={`10-win rate: ${(prediction.tenWinRate * 100).toFixed(0)}%`}
             />
             <StatBlock
               label="Est. Games Needed"
@@ -126,15 +197,50 @@ export function RatingPrediction({
               highlight
             />
             <StatBlock
-              label="Current"
-              value={`#${prediction.currentPosition.toLocaleString()}`}
-              sub={`${prediction.currentRating.toLocaleString()} pts`}
+              label="Equilibrium"
+              value={prediction.equilibriumRating.toLocaleString()}
+              sub="Rating ceiling at current skill"
             />
+          </div>
+        ) : (
+          <div className="px-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+              <StatBlock
+                label="Rating Gap"
+                value={`${prediction.ratingGap.toLocaleString()} pts`}
+                sub={`Target: ${prediction.targetRating.toLocaleString()}`}
+              />
+              <StatBlock
+                label="Avg Wins / Game"
+                value={prediction.avgWins.toFixed(1)}
+                sub={`10-win rate: ${(prediction.tenWinRate * 100).toFixed(0)}%`}
+              />
+              <StatBlock
+                label="Equilibrium"
+                value={prediction.equilibriumRating.toLocaleString()}
+                sub="Rating ceiling at current skill"
+              />
+              <StatBlock
+                label="Need Avg Wins"
+                value={`>${(prediction.targetRating / 100).toFixed(1)}`}
+                sub="To sustain target rating"
+                highlight
+              />
+            </div>
+            <p className="text-xs text-amber-500/80 font-mono">
+              At current win rate, rating stalls around{" "}
+              {prediction.equilibriumRating.toLocaleString()} — need higher avg
+              wins to reach top 1000.
+            </p>
           </div>
         )}
 
         <p className="text-[10px] text-muted-foreground/50 font-mono mt-3 px-2">
-          Based on average rating gain per game session this season. Assumes top-1000 threshold stays at {latestTitle.top1000.toLocaleString()}.
+          ΔR = 5(W − R/100){" "}
+          {prediction.tenWinRate > 0 && "+ 5 for 10-win"}.
+          Based on {prediction.totalGamesPlayed} game sessions.
+          Assumes top-1000 threshold stays at{" "}
+          {latestTitle.top1000.toLocaleString()}.
         </p>
       </CardContent>
     </Card>
