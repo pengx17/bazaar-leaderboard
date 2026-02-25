@@ -36,6 +36,7 @@ export default {
   "chart.rating": "Rating",
   "chart.rank": "Rank",
   "chart.position": "Position",
+  "chart.prediction": "Prediction",
 
   // TitleRatingChart
   "titleChart.heading": "Title Cutoff Lines",
