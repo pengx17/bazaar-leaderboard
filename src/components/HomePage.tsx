@@ -39,37 +39,39 @@ export function HomePage() {
       </section>
 
       {/* Pinned Players */}
-      {seasonId != null && (
-        <section className="mb-10">
-          <PinnedPlayersChart seasonId={seasonId} />
-        </section>
-      )}
+      <section className="mb-10">
+        {seasonId != null && <PinnedPlayersChart seasonId={seasonId} />}
+      </section>
 
       {/* Leaderboard */}
-      {seasonId != null && (
-        <section className="mb-10">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-5 bg-amber-500/60 rounded-sm" />
-            <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-              Leaderboard
-            </h2>
-          </div>
+      <section className="mb-10">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-1 h-5 bg-amber-500/60 rounded-sm" />
+          <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+            Leaderboard
+          </h2>
+        </div>
+        {seasonId != null ? (
           <LeaderboardTable seasonId={seasonId} />
-        </section>
-      )}
+        ) : (
+          <div className="h-[600px] rounded-lg bg-card/30 border border-border/40 animate-pulse" />
+        )}
+      </section>
 
       {/* Title Cutoffs */}
-      {seasonId != null && (
-        <section className="mb-10">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-5 bg-amber-500/60 rounded-sm" />
-            <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-              Title Thresholds
-            </h2>
-          </div>
+      <section className="mb-10">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-1 h-5 bg-amber-500/60 rounded-sm" />
+          <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+            Title Thresholds
+          </h2>
+        </div>
+        {seasonId != null ? (
           <TitleRatingChart seasonId={seasonId} />
-        </section>
-      )}
+        ) : (
+          <div className="h-[420px] rounded-lg bg-card/30 border border-border/40 animate-pulse" />
+        )}
+      </section>
     </>
   );
 }

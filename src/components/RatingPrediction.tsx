@@ -60,15 +60,23 @@ export function RatingPrediction({
   username: string;
   seasonId: number;
 }) {
-  const { data: history } = useFetch(
+  const { data: history, loading: historyLoading } = useFetch(
     () => fetchRatingHistory(username, seasonId),
     [username, seasonId]
   );
 
-  const { data: titleHistory } = useFetch(
+  const { data: titleHistory, loading: titleLoading } = useFetch(
     () => fetchTitleRatingHistory(seasonId),
     [seasonId]
   );
+
+  const loading = historyLoading || titleLoading;
+
+  if (loading) {
+    return (
+      <div className="h-32 rounded-lg bg-card/30 border border-border/40 animate-pulse" />
+    );
+  }
 
   if (!history || !titleHistory || history.length < 2) return null;
 

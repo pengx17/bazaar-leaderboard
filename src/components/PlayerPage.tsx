@@ -7,6 +7,12 @@ import { PinButton } from "@/components/PinButton";
 import { fetchStats, fetchLeaderboard } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
+function SkeletonCard({ height }: { height: string }) {
+  return (
+    <div className={`${height} rounded-lg bg-card/30 border border-border/40 animate-pulse`} />
+  );
+}
+
 export function PlayerPage({ params }: { params: { username: string } }) {
   const username = decodeURIComponent(params.username);
 
@@ -50,7 +56,7 @@ export function PlayerPage({ params }: { params: { username: string } }) {
           </h1>
           <PinButton username={username} size="md" />
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm h-8">
           {/* Current rank & rating */}
           {playerEntry ? (
             <>
@@ -69,9 +75,16 @@ export function PlayerPage({ params }: { params: { username: string } }) {
               </span>
             </>
           ) : (
-            <span className="text-muted-foreground font-mono text-xs">
-              {activeSeason != null ? "Loading..." : ""}
-            </span>
+            <>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card/50 border border-border/40 font-mono">
+                <Hash className="w-3.5 h-3.5 text-muted-foreground/30" />
+                <span className="w-10 h-4 bg-muted-foreground/10 rounded animate-pulse" />
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card/50 border border-border/40 font-mono">
+                <Zap className="w-3.5 h-3.5 text-muted-foreground/30" />
+                <span className="w-12 h-4 bg-muted-foreground/10 rounded animate-pulse" />
+              </span>
+            </>
           )}
 
           {/* Season selector — only show when multiple seasons have data */}
@@ -99,24 +112,28 @@ export function PlayerPage({ params }: { params: { username: string } }) {
       </div>
 
       {/* Prediction */}
-      {activeSeason != null && (
-        <section className="mb-6">
+      <section className="mb-6">
+        {activeSeason != null ? (
           <RatingPrediction username={username} seasonId={activeSeason} />
-        </section>
-      )}
+        ) : (
+          <SkeletonCard height="h-32" />
+        )}
+      </section>
 
       {/* Rating chart */}
-      {activeSeason != null && (
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-5 bg-amber-500/60 rounded-sm" />
-            <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
-              Rating &amp; Rank History
-            </h2>
-          </div>
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-1 h-5 bg-amber-500/60 rounded-sm" />
+          <h2 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+            Rating &amp; Rank History
+          </h2>
+        </div>
+        {activeSeason != null ? (
           <RatingChart username={username} seasonId={activeSeason} />
-        </section>
-      )}
+        ) : (
+          <SkeletonCard height="h-[420px]" />
+        )}
+      </section>
     </>
   );
 }

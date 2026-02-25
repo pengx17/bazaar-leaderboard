@@ -248,7 +248,7 @@ function LeaderboardRow({
       </span>
 
       {/* Player name */}
-      <span className="text-sm font-medium truncate text-foreground group-hover:text-amber-500 transition-colors">
+      <span className="text-sm font-semibold truncate text-foreground group-hover:text-amber-500 transition-colors">
         {entry.username}
       </span>
 
