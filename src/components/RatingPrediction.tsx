@@ -57,7 +57,8 @@ function computePrediction(
 
   const latest = history[history.length - 1];
   const sessions = extractGameSessions(history);
-  if (sessions.length === 0) return null;
+  const MIN_SESSIONS = 5;
+  if (sessions.length < MIN_SESSIONS) return null;
 
   // Use the most recent 30 sessions to reflect current skill level
   const RECENT_COUNT = 30;
@@ -173,8 +174,14 @@ export function RatingPrediction({
     nextTier && latestTitle ? getTierThreshold(nextTier, latestTitle) : null;
   const noThreshold = !insufficientHistory && nextTier != null && tierThreshold == null;
 
+  // Check if we have enough game sessions (rating changes) to predict
+  const MIN_SESSIONS = 5;
+  const gameSessions = history ? extractGameSessions(history) : [];
+  const fewGames =
+    !insufficientHistory && !isNaN(gameSessions.length) && gameSessions.length < MIN_SESSIONS;
+
   const prediction =
-    tierThreshold != null && history
+    tierThreshold != null && history && !fewGames
       ? computePrediction(history, tierThreshold)
       : null;
 
@@ -193,12 +200,14 @@ export function RatingPrediction({
           </h3>
         </div>
 
-        {insufficientHistory || noThreshold ? (
+        {insufficientHistory || noThreshold || fewGames ? (
           <div className="px-2 py-4 text-center">
             <p className="text-xs text-muted-foreground font-mono">
               {insufficientHistory
                 ? t("prediction.noHistory")
-                : t("prediction.noThreshold")}
+                : fewGames
+                  ? t("prediction.fewGames")
+                  : t("prediction.noThreshold")}
             </p>
           </div>
         ) : isElite ? (

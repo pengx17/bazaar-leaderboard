@@ -84,6 +84,8 @@ export default {
 
   "prediction.noHistory":
     "Need at least 2 rating snapshots to predict. Data is collected every 30 minutes — check back soon.",
+  "prediction.fewGames":
+    "Need at least 5 game sessions (rating changes) to predict. Keep playing!",
   "prediction.noThreshold":
     "Threshold data not available yet for this season.",
 
