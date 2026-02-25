@@ -426,11 +426,13 @@ async function main(): Promise<void> {
       log(`Empty response (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY_MS / 1000}s...`);
       await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
     } else {
-      log(`Empty response after ${MAX_RETRIES} attempts. Skipping storage.`);
+      log(`Empty response after ${MAX_RETRIES} attempts.`);
     }
   }
 
-  if (!leaderboard) return;
+  if (!leaderboard) {
+    throw new Error(`Leaderboard API returned empty data after ${MAX_RETRIES} attempts`);
+  }
 
   // 4. Store in D1
   const fetchedAt = new Date().toISOString();
