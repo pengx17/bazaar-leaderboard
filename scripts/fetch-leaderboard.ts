@@ -301,7 +301,7 @@ function buildInsertBatches(
       .join(", ");
 
     statements.push({
-      sql: `INSERT INTO entries (snapshot_id, account_id, username, position, rating) VALUES ${values}`,
+      sql: `INSERT OR IGNORE INTO entries (snapshot_id, account_id, username, position, rating) VALUES ${values}`,
     });
   }
 
