@@ -331,6 +331,81 @@ async function storeEntries(
 }
 
 // ---------------------------------------------------------------------------
+// Derived tables (precomputation)
+// ---------------------------------------------------------------------------
+
+async function computeSnapshotMetrics(
+  snapshotId: number,
+  entries: LeaderboardEntry[]
+): Promise<void> {
+  log("Computing snapshot metrics...");
+
+  // Build a map of position → rating, find closest position <= boundary
+  const byPosition = new Map(entries.map((e) => [e.Position, e.Rating]));
+  function ratingAtBoundary(maxPos: number): number | null {
+    for (let p = maxPos; p >= 1; p--) {
+      if (byPosition.has(p)) return byPosition.get(p)!;
+    }
+    return null;
+  }
+
+  await queryD1({
+    sql: `INSERT INTO snapshot_metrics (snapshot_id, top1_rating, top10_rating, top100_rating, top1000_rating)
+          VALUES (?, ?, ?, ?, ?)`,
+    params: [
+      snapshotId,
+      ratingAtBoundary(1),
+      ratingAtBoundary(10),
+      ratingAtBoundary(100),
+      ratingAtBoundary(1000),
+    ],
+  });
+
+  log("Snapshot metrics saved.");
+}
+
+async function computeDelta24h(
+  snapshotId: number,
+  seasonId: number,
+  fetchedAt: string
+): Promise<void> {
+  // Find the baseline snapshot (~24h ago)
+  const baselineResp = await queryD1<{ id: number }>({
+    sql: `SELECT id FROM snapshots
+          WHERE season_id = ?
+            AND total_entries > 1
+            AND fetched_at <= datetime(?, '-1 day')
+          ORDER BY fetched_at DESC
+          LIMIT 1`,
+    params: [seasonId, fetchedAt],
+  });
+
+  const baselineId = baselineResp.result[0]?.results[0]?.id;
+  if (!baselineId) {
+    log("No 24h baseline snapshot found, skipping delta computation.");
+    return;
+  }
+
+  log(`Computing 24h deltas (baseline snapshot #${baselineId})...`);
+
+  // INSERT...SELECT: for each player in the new snapshot that also existed
+  // in the baseline, store their baseline position and rating.
+  await queryD1({
+    sql: `INSERT INTO snapshot_delta_24h (snapshot_id, username, prev_position, prev_rating)
+          SELECT ?, p.username, p.position, p.rating
+          FROM entries p
+          WHERE p.snapshot_id = ?
+            AND EXISTS (
+              SELECT 1 FROM entries e
+              WHERE e.snapshot_id = ? AND e.username = p.username
+            )`,
+    params: [snapshotId, baselineId, snapshotId],
+  });
+
+  log("24h deltas saved.");
+}
+
+// ---------------------------------------------------------------------------
 // Season detection
 // ---------------------------------------------------------------------------
 
@@ -383,9 +458,18 @@ async function cleanupOldSeasons(): Promise<void> {
 
   const placeholders = seasonsToDelete.map(() => "?").join(", ");
 
-  // Delete entries first (FK reference), then snapshots
+  // Delete derived tables, entries, then snapshots
+  const snapshotFilter = `SELECT id FROM snapshots WHERE season_id IN (${placeholders})`;
   await queryD1({
-    sql: `DELETE FROM entries WHERE snapshot_id IN (SELECT id FROM snapshots WHERE season_id IN (${placeholders}))`,
+    sql: `DELETE FROM snapshot_delta_24h WHERE snapshot_id IN (${snapshotFilter})`,
+    params: seasonsToDelete,
+  });
+  await queryD1({
+    sql: `DELETE FROM snapshot_metrics WHERE snapshot_id IN (${snapshotFilter})`,
+    params: seasonsToDelete,
+  });
+  await queryD1({
+    sql: `DELETE FROM entries WHERE snapshot_id IN (${snapshotFilter})`,
     params: seasonsToDelete,
   });
   await queryD1({
@@ -456,7 +540,11 @@ async function main(): Promise<void> {
 
     await storeEntries(snapshotId, leaderboard.entries);
 
-    // 5. Cleanup old seasons
+    // 5. Compute derived tables
+    await computeSnapshotMetrics(snapshotId, leaderboard.entries);
+    await computeDelta24h(snapshotId, seasonId, fetchedAt);
+
+    // 6. Cleanup old seasons
     await cleanupOldSeasons();
 
     log("=== Bazaar Leaderboard Fetch Complete ===");

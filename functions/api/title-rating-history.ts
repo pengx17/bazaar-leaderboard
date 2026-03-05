@@ -28,23 +28,26 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       seasonId = latest?.latest ?? 1;
     }
   try {
-    // For each snapshot in the season, get the rating at the boundary
-    // positions (10th, 100th, 1000th). Returns the full season history.
-    // Skip snapshots with very few entries (e.g. old single-player imports).
+    // Read precomputed title boundary ratings from snapshot_metrics.
+    // Falls back to entries subqueries for snapshots without metrics (pre-migration).
     const results = await db
       .prepare(
         `SELECT
            s.fetched_at AS time,
-           (SELECT e.rating FROM entries e
-            WHERE e.snapshot_id = s.id AND e.position <= 10
-            ORDER BY e.position DESC LIMIT 1) AS top10,
-           (SELECT e.rating FROM entries e
-            WHERE e.snapshot_id = s.id AND e.position <= 100
-            ORDER BY e.position DESC LIMIT 1) AS top100,
-           (SELECT e.rating FROM entries e
-            WHERE e.snapshot_id = s.id AND e.position <= 1000
-            ORDER BY e.position DESC LIMIT 1) AS top1000
+           COALESCE(m.top10_rating,
+             (SELECT e.rating FROM entries e
+              WHERE e.snapshot_id = s.id AND e.position <= 10
+              ORDER BY e.position DESC LIMIT 1)) AS top10,
+           COALESCE(m.top100_rating,
+             (SELECT e.rating FROM entries e
+              WHERE e.snapshot_id = s.id AND e.position <= 100
+              ORDER BY e.position DESC LIMIT 1)) AS top100,
+           COALESCE(m.top1000_rating,
+             (SELECT e.rating FROM entries e
+              WHERE e.snapshot_id = s.id AND e.position <= 1000
+              ORDER BY e.position DESC LIMIT 1)) AS top1000
          FROM snapshots s
+         LEFT JOIN snapshot_metrics m ON m.snapshot_id = s.id
          WHERE s.season_id = ? AND s.total_entries > 1
          ORDER BY s.fetched_at ASC`
       )
@@ -56,7 +59,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         top1000: number | null;
       }>();
 
-    // Filter out snapshots where all values are null
     const history = results.results
       .filter((row) => row.top10 != null || row.top100 != null || row.top1000 != null)
       .map((row) => ({

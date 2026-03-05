@@ -70,82 +70,67 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       .bind(latestSnapshot.id)
       .first<{ username: string; rating: number; position: number }>();
 
-    // Daily change: compare top player's current rating vs ~24h ago
-    // Find a snapshot from ~24h ago (skip single-player imports)
-    const oldSnapshot = await db
-      .prepare(
-        `SELECT id FROM snapshots
-         WHERE season_id = ?
-           AND total_entries > 1
-           AND fetched_at <= datetime(?, '-1 day')
-         ORDER BY fetched_at DESC
-         LIMIT 1`
-      )
-      .bind(seasonId, latestSnapshot.fetched_at)
-      .first<{ id: number }>();
-
+    // Daily change for top player from precomputed delta table
     let dailyTopChange: number | null = null;
 
-    if (topPlayer && oldSnapshot) {
-      const oldEntry = await db
+    if (topPlayer) {
+      const topDelta = await db
         .prepare(
-          `SELECT rating FROM entries
+          `SELECT prev_rating FROM snapshot_delta_24h
            WHERE snapshot_id = ? AND username = ?`
         )
-        .bind(oldSnapshot.id, topPlayer.username)
-        .first<{ rating: number }>();
+        .bind(latestSnapshot.id, topPlayer.username)
+        .first<{ prev_rating: number }>();
 
-      if (oldEntry) {
-        dailyTopChange = topPlayer.rating - oldEntry.rating;
+      if (topDelta) {
+        dailyTopChange = topPlayer.rating - topDelta.prev_rating;
       }
     }
 
-    // 24h movers: biggest rating gain, biggest rating drop, biggest rank climb
+    // 24h movers from precomputed delta table
     type MoverRow = { username: string; rating: number; delta: number };
     let biggestGainer: MoverRow | null = null;
     let biggestLoser: MoverRow | null = null;
     let biggestClimber: { username: string; rating: number; positionDelta: number } | null = null;
 
-    if (oldSnapshot) {
-      const gainerResult = await db
-        .prepare(
-          `SELECT e.username, e.rating, (e.rating - p.rating) AS delta
-           FROM entries e
-           JOIN entries p ON p.snapshot_id = ? AND p.username = e.username
-           WHERE e.snapshot_id = ?
-           ORDER BY delta DESC
-           LIMIT 1`
-        )
-        .bind(oldSnapshot.id, latestSnapshot.id)
-        .first<MoverRow>();
-      if (gainerResult && gainerResult.delta > 0) biggestGainer = gainerResult;
+    const gainerResult = await db
+      .prepare(
+        `SELECT e.username, e.rating, (e.rating - d.prev_rating) AS delta
+         FROM entries e
+         JOIN snapshot_delta_24h d ON d.snapshot_id = e.snapshot_id AND d.username = e.username
+         WHERE e.snapshot_id = ?
+         ORDER BY delta DESC
+         LIMIT 1`
+      )
+      .bind(latestSnapshot.id)
+      .first<MoverRow>();
+    if (gainerResult && gainerResult.delta > 0) biggestGainer = gainerResult;
 
-      const loserResult = await db
-        .prepare(
-          `SELECT e.username, e.rating, (e.rating - p.rating) AS delta
-           FROM entries e
-           JOIN entries p ON p.snapshot_id = ? AND p.username = e.username
-           WHERE e.snapshot_id = ?
-           ORDER BY delta ASC
-           LIMIT 1`
-        )
-        .bind(oldSnapshot.id, latestSnapshot.id)
-        .first<MoverRow>();
-      if (loserResult && loserResult.delta < 0) biggestLoser = loserResult;
+    const loserResult = await db
+      .prepare(
+        `SELECT e.username, e.rating, (e.rating - d.prev_rating) AS delta
+         FROM entries e
+         JOIN snapshot_delta_24h d ON d.snapshot_id = e.snapshot_id AND d.username = e.username
+         WHERE e.snapshot_id = ?
+         ORDER BY delta ASC
+         LIMIT 1`
+      )
+      .bind(latestSnapshot.id)
+      .first<MoverRow>();
+    if (loserResult && loserResult.delta < 0) biggestLoser = loserResult;
 
-      const climberResult = await db
-        .prepare(
-          `SELECT e.username, e.rating, (p.position - e.position) AS positionDelta
-           FROM entries e
-           JOIN entries p ON p.snapshot_id = ? AND p.username = e.username
-           WHERE e.snapshot_id = ?
-           ORDER BY positionDelta DESC
-           LIMIT 1`
-        )
-        .bind(oldSnapshot.id, latestSnapshot.id)
-        .first<{ username: string; rating: number; positionDelta: number }>();
-      if (climberResult && climberResult.positionDelta > 0) biggestClimber = climberResult;
-    }
+    const climberResult = await db
+      .prepare(
+        `SELECT e.username, e.rating, (d.prev_position - e.position) AS positionDelta
+         FROM entries e
+         JOIN snapshot_delta_24h d ON d.snapshot_id = e.snapshot_id AND d.username = e.username
+         WHERE e.snapshot_id = ?
+         ORDER BY positionDelta DESC
+         LIMIT 1`
+      )
+      .bind(latestSnapshot.id)
+      .first<{ username: string; rating: number; positionDelta: number }>();
+    if (climberResult && climberResult.positionDelta > 0) biggestClimber = climberResult;
 
     // Get all seasons that have data
     const seasonRows = await db
