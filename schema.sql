@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS entries (
 
 CREATE INDEX IF NOT EXISTS idx_entries_snapshot ON entries(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_entries_username ON entries(username, snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_entries_account ON entries(account_id, snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_entries_position ON entries(snapshot_id, position);
 
 -- Precomputed per-snapshot title boundary ratings
@@ -31,10 +32,10 @@ CREATE TABLE IF NOT EXISTS snapshot_metrics (
 -- Precomputed 24h deltas (baseline values for players present in both snapshots)
 CREATE TABLE IF NOT EXISTS snapshot_delta_24h (
   snapshot_id INTEGER NOT NULL,
-  username TEXT NOT NULL,
+  account_id TEXT NOT NULL,
   prev_position INTEGER NOT NULL,
   prev_rating INTEGER NOT NULL,
-  PRIMARY KEY (snapshot_id, username)
+  PRIMARY KEY (snapshot_id, account_id)
 );
 
 CREATE TABLE IF NOT EXISTS auth_tokens (

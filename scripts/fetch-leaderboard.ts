@@ -335,30 +335,20 @@ async function storeEntries(
 // ---------------------------------------------------------------------------
 
 async function computeSnapshotMetrics(
-  snapshotId: number,
-  entries: LeaderboardEntry[]
+  snapshotId: number
 ): Promise<void> {
   log("Computing snapshot metrics...");
 
-  // Build a map of position → rating, find closest position <= boundary
-  const byPosition = new Map(entries.map((e) => [e.Position, e.Rating]));
-  function ratingAtBoundary(maxPos: number): number | null {
-    for (let p = maxPos; p >= 1; p--) {
-      if (byPosition.has(p)) return byPosition.get(p)!;
-    }
-    return null;
-  }
-
+  // Compute from actual DB entries (not in-memory payload) to stay consistent
+  // with what INSERT OR IGNORE actually stored.
   await queryD1({
     sql: `INSERT INTO snapshot_metrics (snapshot_id, top1_rating, top10_rating, top100_rating, top1000_rating)
-          VALUES (?, ?, ?, ?, ?)`,
-    params: [
-      snapshotId,
-      ratingAtBoundary(1),
-      ratingAtBoundary(10),
-      ratingAtBoundary(100),
-      ratingAtBoundary(1000),
-    ],
+          SELECT ?,
+            (SELECT rating FROM entries WHERE snapshot_id = ? AND position = 1),
+            (SELECT rating FROM entries WHERE snapshot_id = ? AND position <= 10 ORDER BY position DESC LIMIT 1),
+            (SELECT rating FROM entries WHERE snapshot_id = ? AND position <= 100 ORDER BY position DESC LIMIT 1),
+            (SELECT rating FROM entries WHERE snapshot_id = ? AND position <= 1000 ORDER BY position DESC LIMIT 1)`,
+    params: [snapshotId, snapshotId, snapshotId, snapshotId, snapshotId],
   });
 
   log("Snapshot metrics saved.");
@@ -391,13 +381,13 @@ async function computeDelta24h(
   // INSERT...SELECT: for each player in the new snapshot that also existed
   // in the baseline, store their baseline position and rating.
   await queryD1({
-    sql: `INSERT INTO snapshot_delta_24h (snapshot_id, username, prev_position, prev_rating)
-          SELECT ?, p.username, p.position, p.rating
+    sql: `INSERT INTO snapshot_delta_24h (snapshot_id, account_id, prev_position, prev_rating)
+          SELECT ?, p.account_id, p.position, p.rating
           FROM entries p
           WHERE p.snapshot_id = ?
             AND EXISTS (
               SELECT 1 FROM entries e
-              WHERE e.snapshot_id = ? AND e.username = p.username
+              WHERE e.snapshot_id = ? AND e.account_id = p.account_id
             )`,
     params: [snapshotId, baselineId, snapshotId],
   });
@@ -541,7 +531,7 @@ async function main(): Promise<void> {
     await storeEntries(snapshotId, leaderboard.entries);
 
     // 5. Compute derived tables
-    await computeSnapshotMetrics(snapshotId, leaderboard.entries);
+    await computeSnapshotMetrics(snapshotId);
     await computeDelta24h(snapshotId, seasonId, fetchedAt);
 
     // 6. Cleanup old seasons

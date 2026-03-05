@@ -127,11 +127,11 @@ async function backfillDeltas(): Promise<void> {
     const baselineId = baseline[0].id;
 
     await queryD1(
-      `INSERT INTO snapshot_delta_24h (snapshot_id, username, prev_position, prev_rating)
-       SELECT ?, p.username, p.position, p.rating
+      `INSERT INTO snapshot_delta_24h (snapshot_id, account_id, prev_position, prev_rating)
+       SELECT ?, p.account_id, p.position, p.rating
        FROM entries p
        WHERE p.snapshot_id = ?
-         AND EXISTS (SELECT 1 FROM entries e WHERE e.snapshot_id = ? AND e.username = p.username)`,
+         AND EXISTS (SELECT 1 FROM entries e WHERE e.snapshot_id = ? AND e.account_id = p.account_id)`,
       [sid, baselineId, sid]
     );
 
