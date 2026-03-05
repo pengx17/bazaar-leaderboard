@@ -147,8 +147,39 @@ async function backfillDeltas(): Promise<void> {
 // Main
 // ---------------------------------------------------------------------------
 
+async function migrate() {
+  log("Running migrations (idempotent)...");
+
+  await queryD1(
+    `CREATE TABLE IF NOT EXISTS snapshot_metrics (
+       snapshot_id INTEGER PRIMARY KEY REFERENCES snapshots(id),
+       top1_rating INTEGER,
+       top10_rating INTEGER,
+       top100_rating INTEGER,
+       top1000_rating INTEGER
+     )`
+  );
+
+  await queryD1(
+    `CREATE TABLE IF NOT EXISTS snapshot_delta_24h (
+       snapshot_id INTEGER NOT NULL,
+       account_id TEXT NOT NULL,
+       prev_position INTEGER NOT NULL,
+       prev_rating INTEGER NOT NULL,
+       PRIMARY KEY (snapshot_id, account_id)
+     )`
+  );
+
+  await queryD1(
+    `CREATE INDEX IF NOT EXISTS idx_entries_account ON entries(account_id, snapshot_id)`
+  );
+
+  log("Migrations complete.");
+}
+
 async function main() {
   log("=== Backfill Derived Tables Start ===");
+  await migrate();
   await backfillMetrics();
   await backfillDeltas();
   log("=== Backfill Complete ===");
