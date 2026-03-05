@@ -127,11 +127,11 @@ async function backfillDeltas(): Promise<void> {
     const baselineId = baseline[0].id;
 
     await queryD1(
-      `INSERT INTO snapshot_delta_24h (snapshot_id, account_id, prev_position, prev_rating)
-       SELECT ?, p.account_id, p.position, p.rating
+      `INSERT INTO snapshot_delta_24h (snapshot_id, username, prev_position, prev_rating)
+       SELECT ?, p.username, p.position, p.rating
        FROM entries p
        WHERE p.snapshot_id = ?
-         AND EXISTS (SELECT 1 FROM entries e WHERE e.snapshot_id = ? AND e.account_id = p.account_id)`,
+         AND EXISTS (SELECT 1 FROM entries e WHERE e.snapshot_id = ? AND e.username = p.username)`,
       [sid, baselineId, sid]
     );
 
@@ -147,45 +147,8 @@ async function backfillDeltas(): Promise<void> {
 // Main
 // ---------------------------------------------------------------------------
 
-async function migrate() {
-  log("Running migrations (idempotent)...");
-
-  await queryD1(
-    `CREATE TABLE IF NOT EXISTS snapshot_metrics (
-       snapshot_id INTEGER PRIMARY KEY REFERENCES snapshots(id),
-       top1_rating INTEGER,
-       top10_rating INTEGER,
-       top100_rating INTEGER,
-       top1000_rating INTEGER
-     )`
-  );
-
-  await queryD1(
-    `CREATE TABLE IF NOT EXISTS snapshot_delta_24h (
-       snapshot_id INTEGER NOT NULL,
-       account_id TEXT NOT NULL,
-       prev_position INTEGER NOT NULL,
-       prev_rating INTEGER NOT NULL,
-       PRIMARY KEY (snapshot_id, account_id)
-     )`
-  );
-
-  // Index creation may fail on large tables due to D1 memory limits.
-  // The index will be built incrementally as old data gets cleaned up.
-  try {
-    await queryD1(
-      `CREATE INDEX IF NOT EXISTS idx_entries_account ON entries(account_id, snapshot_id)`
-    );
-  } catch (err) {
-    log(`Warning: index creation failed (expected on large tables): ${err}`);
-  }
-
-  log("Migrations complete.");
-}
-
 async function main() {
   log("=== Backfill Derived Tables Start ===");
-  await migrate();
   await backfillMetrics();
   await backfillDeltas();
   log("=== Backfill Complete ===");

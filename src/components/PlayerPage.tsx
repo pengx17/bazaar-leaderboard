@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, Hash, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { RatingChart } from "@/components/RatingChart";
 import { RatingPrediction } from "@/components/RatingPrediction";
 import { PinButton } from "@/components/PinButton";
-import { fetchStats, fetchLeaderboard, formatSeasonName } from "@/lib/api";
+import { fetchLeaderboard } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
 function SkeletonCard({ height }: { height: string }) {
@@ -14,17 +13,9 @@ function SkeletonCard({ height }: { height: string }) {
   );
 }
 
-export function PlayerPage({ params }: { params: { username: string } }) {
+export function PlayerPage({ params, seasonId: activeSeason }: { params: { username: string }; seasonId: number | null }) {
   const { t } = useTranslation();
   const username = decodeURIComponent(params.username);
-
-  // Fetch stats to get current season and available seasons
-  const { data: stats } = useFetch(() => fetchStats(), []);
-  const currentSeason = stats?.seasonId;
-  const seasons = stats?.availableSeasons ?? [];
-
-  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
-  const activeSeason = selectedSeason ?? currentSeason;
 
   // Fetch player's current rank/rating from leaderboard (exact match)
   const { data: playerData } = useFetch(
@@ -89,27 +80,6 @@ export function PlayerPage({ params }: { params: { username: string } }) {
             </>
           )}
 
-          {/* Season selector — only show when multiple seasons have data */}
-          {seasons.length > 1 && (
-            <div className="flex items-center gap-1 ml-auto">
-              <span className="text-xs text-muted-foreground font-mono mr-1">
-                {t("player.season")}
-              </span>
-              {seasons.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSelectedSeason(s)}
-                  className={`min-w-[36px] h-7 px-2 text-xs font-mono rounded transition-colors ${
-                    s === activeSeason
-                      ? "bg-amber-500/15 text-amber-500 font-bold"
-                      : "text-muted-foreground hover:text-foreground hover:bg-card/80 border border-border/30"
-                  }`}
-                >
-                  {formatSeasonName(s)}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 

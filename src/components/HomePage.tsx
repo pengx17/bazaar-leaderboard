@@ -3,13 +3,20 @@ import { StatsPanel } from "@/components/StatsPanel";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { TitleRatingChart } from "@/components/TitleRatingChart";
 import { PinnedPlayersChart } from "@/components/PinnedPlayersChart";
-import { fetchStats, formatSeasonName } from "@/lib/api";
+import { fetchStats } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 
-export function HomePage() {
+interface HomePageProps {
+  seasonId: number | null;
+  seasonName: string | null;
+}
+
+export function HomePage({ seasonId, seasonName }: HomePageProps) {
   const { t } = useTranslation();
-  const { data: stats, loading, error } = useFetch(() => fetchStats(), []);
-  const seasonId = stats?.seasonId;
+  const { data: stats, loading, error } = useFetch(
+    () => seasonId != null ? fetchStats(seasonId) : Promise.resolve(null),
+    [seasonId]
+  );
 
   return (
     <>
@@ -22,8 +29,8 @@ export function HomePage() {
           </h1>
         </div>
         <p className="text-sm text-muted-foreground font-mono ml-5 tracking-wide">
-          {seasonId != null
-            ? t("home.subtitleSeason", { season: formatSeasonName(seasonId) })
+          {seasonName != null
+            ? t("home.subtitleSeason", { season: seasonName })
             : t("home.subtitle")}
         </p>
       </header>
