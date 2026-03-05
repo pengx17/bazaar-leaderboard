@@ -1,0 +1,230 @@
+import ReactECharts from "echarts-for-react";
+import { useTranslation } from "react-i18next";
+import { Card, CardContent } from "@/components/ui/card";
+import { fetchRatingHistory } from "@/lib/api";
+import { useFetch } from "@/lib/use-fetch";
+import { useTheme } from "@/lib/theme";
+import { getChartTheme } from "@/lib/chart-theme";
+import { buildUniformTimeline, indexByTime, forwardFillSeries } from "@/lib/time-series";
+
+interface RatingChartProps {
+  username: string;
+  seasonId: number;
+}
+
+export function RatingChart({ username, seasonId }: RatingChartProps) {
+  const { t } = useTranslation();
+  const { theme } = useTheme();
+  const ct = getChartTheme(theme);
+  const {
+    data: ratingData,
+    loading,
+    error,
+  } = useFetch(() => fetchRatingHistory(username, seasonId), [username, seasonId]);
+
+  if (loading) {
+    return (
+      <Card className="stat-card">
+        <CardContent className="p-6">
+          <div className="h-80 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="stat-card">
+        <CardContent className="p-6 text-center text-red-400">
+          {error}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const data = ratingData?.history;
+  const seasonEnd = ratingData?.seasonEnd;
+
+  if (!data || data.length === 0) {
+    return (
+      <Card className="stat-card">
+        <CardContent className="p-6 text-center text-muted-foreground">
+          {t("chart.noData", { username })}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isSparse = data.length <= 3;
+
+  // Build timeline: start from first data point, extend to season end
+  const rawTimes = data.map((d) => d.time);
+  const allTimes = [...rawTimes];
+  if (seasonEnd) allTimes.push(seasonEnd);
+  const timeline = buildUniformTimeline(allTimes);
+
+  const ratingByTime = indexByTime(rawTimes, data.map((d) => d.rating));
+  const positionByTime = indexByTime(rawTimes, data.map((d) => d.position));
+  const ratingSeriesData = forwardFillSeries(timeline, ratingByTime);
+  const positionSeriesData = forwardFillSeries(timeline, positionByTime);
+
+  // Compute axis ranges with ~10% padding
+  const ratingVals = ratingSeriesData.map((d) => d[1]).filter((v): v is number => v != null);
+  const ratingMin = Math.min(...ratingVals);
+  const ratingMax = Math.max(...ratingVals);
+  const ratingPad = Math.max(Math.round((ratingMax - ratingMin) * 0.1), 5);
+
+  const posVals = positionSeriesData.map((d) => d[1]).filter((v): v is number => v != null);
+  const posMin = Math.min(...posVals);
+  const posMax = Math.max(...posVals);
+  const posPad = Math.max(Math.round((posMax - posMin) * 0.1), 1);
+
+  const option = {
+    backgroundColor: "transparent",
+    tooltip: {
+      trigger: "axis" as const,
+      backgroundColor: ct.tooltipBg,
+      borderColor: ct.tooltipBorder,
+      textStyle: {
+        color: ct.tooltipText,
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 12,
+      },
+      formatter: (params: Array<{ seriesName: string; value: [number, number]; axisValueLabel: string }>) => {
+        const time = new Date(params[0].value[0]).toLocaleString();
+        let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
+        for (const p of params) {
+          if (p.value[1] == null) continue;
+          const color = p.seriesName === t("chart.rating") ? ct.ratingAxis : ct.positionAxis;
+          html += `<div style="display:flex;align-items:center;gap:6px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${color}"></span>
+            <span>${p.seriesName}:</span>
+            <strong>${p.value[1].toLocaleString()}</strong>
+          </div>`;
+        }
+        return html;
+      },
+    },
+    grid: {
+      left: 60,
+      right: 60,
+      top: 40,
+      bottom: 30,
+    },
+    xAxis: {
+      type: "time" as const,
+      axisLabel: {
+        color: ct.axisLabel,
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 10,
+        formatter: (value: number) => {
+          const d = new Date(value);
+          return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+        },
+      },
+      axisLine: { lineStyle: { color: ct.axisLine } },
+      splitLine: { show: false },
+    },
+    yAxis: [
+      {
+        type: "value" as const,
+        name: t("chart.rating"),
+        min: ratingMin - ratingPad,
+        max: ratingMax + ratingPad,
+        nameTextStyle: {
+          color: ct.ratingAxis,
+          fontFamily: "JetBrains Mono, monospace",
+          fontSize: 11,
+        },
+        axisLabel: {
+          color: ct.ratingAxis,
+          fontFamily: "JetBrains Mono, monospace",
+          fontSize: 10,
+        },
+        splitLine: {
+          lineStyle: { color: ct.ratingSplitLine },
+        },
+      },
+      {
+        type: "value" as const,
+        name: t("chart.rank"),
+        min: Math.max(1, posMin - posPad),
+        max: posMax + posPad,
+        nameTextStyle: {
+          color: ct.positionAxis,
+          fontFamily: "JetBrains Mono, monospace",
+          fontSize: 11,
+        },
+        axisLabel: {
+          color: ct.positionAxis,
+          fontFamily: "JetBrains Mono, monospace",
+          fontSize: 10,
+        },
+        inverse: true,
+        splitLine: { show: false },
+      },
+    ],
+    series: [
+      {
+        name: t("chart.rating"),
+        type: "line",
+        data: ratingSeriesData,
+        yAxisIndex: 0,
+        smooth: true,
+        symbol: isSparse ? "circle" : "none",
+        symbolSize: isSparse ? 6 : 0,
+        lineStyle: {
+          color: ct.ratingAxis,
+          width: 2,
+        },
+        areaStyle: {
+          color: {
+            type: "linear" as const,
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: ct.ratingAxis + "26" },
+              { offset: 1, color: ct.ratingAxis + "00" },
+            ],
+          },
+        },
+      },
+      {
+        name: t("chart.position"),
+        type: "line",
+        data: positionSeriesData,
+        yAxisIndex: 1,
+        smooth: true,
+        symbol: isSparse ? "circle" : "none",
+        symbolSize: isSparse ? 6 : 0,
+        lineStyle: {
+          color: ct.positionAxis,
+          width: 2,
+          type: "dashed" as const,
+        },
+      },
+    ],
+  };
+
+  return (
+    <Card className="stat-card">
+      <CardContent className="p-4 pt-5">
+        <div className="flex items-baseline gap-3 mb-4 px-2">
+          <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+            {t("chart.playerTracking")}
+          </h3>
+          <span className="text-base font-bold text-foreground">{username}</span>
+        </div>
+        <ReactECharts
+          option={option}
+          style={{ height: 360 }}
+          opts={{ renderer: "svg" }}
+        />
+      </CardContent>
+    </Card>
+  );
+}

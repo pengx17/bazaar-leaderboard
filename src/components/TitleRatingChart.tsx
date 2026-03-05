@@ -1,0 +1,208 @@
+import ReactECharts from "echarts-for-react";
+import { useTranslation } from "react-i18next";
+import { Card, CardContent } from "@/components/ui/card";
+import { fetchTitleRatingHistory } from "@/lib/api";
+import { useFetch } from "@/lib/use-fetch";
+import { useTheme } from "@/lib/theme";
+import { getChartTheme } from "@/lib/chart-theme";
+import { buildUniformTimeline, indexByTime, forwardFillSeries } from "@/lib/time-series";
+
+export function TitleRatingChart({ seasonId }: { seasonId: number }) {
+  const { t } = useTranslation();
+  const { theme } = useTheme();
+  const ct = getChartTheme(theme);
+  const { data, loading, error } = useFetch(
+    () => fetchTitleRatingHistory(seasonId),
+    [seasonId]
+  );
+
+  if (loading) {
+    return (
+      <Card className="stat-card">
+        <CardContent className="p-6">
+          <div className="h-80 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="stat-card">
+        <CardContent className="p-6 text-center text-red-400">
+          {error}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <Card className="stat-card">
+        <CardContent className="p-6 text-center text-muted-foreground">
+          {t("titleChart.noData")}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Build uniform 30-min timeline and forward-fill each tier
+  const rawTimes = data.map((d) => d.time);
+  const timeline = buildUniformTimeline(rawTimes);
+
+  const top10Data = forwardFillSeries(
+    timeline,
+    indexByTime(rawTimes, data.map((d) => d.top10 as number))
+  );
+  const top100Data = forwardFillSeries(
+    timeline,
+    indexByTime(rawTimes, data.map((d) => d.top100 as number))
+  );
+  const top1000Data = forwardFillSeries(
+    timeline,
+    indexByTime(rawTimes, data.map((d) => d.top1000 as number))
+  );
+
+  const lineColors = {
+    top10: "#f59e0b",
+    top100: "#8b5cf6",
+    top1000: "#06b6d4",
+  };
+
+  const option = {
+    backgroundColor: "transparent",
+    tooltip: {
+      trigger: "axis" as const,
+      backgroundColor: ct.tooltipBg,
+      borderColor: ct.tooltipBorder,
+      textStyle: {
+        color: ct.tooltipText,
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 12,
+      },
+      formatter: (params: Array<{ seriesName: string; value: [number, number | null]; color: string }>) => {
+        const time = new Date(params[0].value[0]).toLocaleString();
+        let html = `<div style="font-size:11px;color:${ct.tooltipSecondary};margin-bottom:4px">${time}</div>`;
+        for (const p of params) {
+          if (p.value[1] == null) continue;
+          html += `<div style="display:flex;align-items:center;gap:6px">
+            <span style="width:8px;height:2px;background:${p.color}"></span>
+            <span>${p.seriesName}:</span>
+            <strong>${p.value[1].toLocaleString()}</strong>
+          </div>`;
+        }
+        return html;
+      },
+    },
+    legend: {
+      data: [t("titleChart.top10"), t("titleChart.top100"), t("titleChart.top1000")],
+      top: 4,
+      right: 8,
+      textStyle: {
+        color: ct.axisLabel,
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 11,
+      },
+      itemWidth: 16,
+      itemHeight: 2,
+    },
+    grid: {
+      left: 60,
+      right: 16,
+      top: 40,
+      bottom: 30,
+    },
+    xAxis: {
+      type: "time" as const,
+      axisLabel: {
+        color: ct.axisLabel,
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 10,
+        formatter: (value: number) => {
+          const d = new Date(value);
+          return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+        },
+      },
+      axisLine: { lineStyle: { color: ct.axisLine } },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: "value" as const,
+      name: t("chart.rating"),
+      nameTextStyle: {
+        color: ct.axisLabel,
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 11,
+      },
+      axisLabel: {
+        color: ct.axisLabel,
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 10,
+      },
+      splitLine: {
+        lineStyle: { color: ct.splitLine },
+      },
+    },
+    series: [
+      {
+        name: t("titleChart.top10"),
+        type: "line",
+        data: top10Data,
+        smooth: true,
+        symbol: "none",
+        lineStyle: { color: lineColors.top10, width: 2 },
+        areaStyle: {
+          color: {
+            type: "linear" as const,
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: "rgba(245, 158, 11, 0.08)" },
+              { offset: 1, color: "rgba(245, 158, 11, 0)" },
+            ],
+          },
+        },
+      },
+      {
+        name: t("titleChart.top100"),
+        type: "line",
+        data: top100Data,
+        smooth: true,
+        symbol: "none",
+        lineStyle: { color: lineColors.top100, width: 2 },
+      },
+      {
+        name: t("titleChart.top1000"),
+        type: "line",
+        data: top1000Data,
+        smooth: true,
+        symbol: "none",
+        lineStyle: { color: lineColors.top1000, width: 2 },
+      },
+    ],
+  };
+
+  return (
+    <Card className="stat-card">
+      <CardContent className="p-4 pt-5">
+        <div className="px-2 mb-4">
+          <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+            {t("titleChart.heading")}
+          </h3>
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            {t("titleChart.description")}
+          </p>
+        </div>
+        <ReactECharts
+          option={option}
+          style={{ height: 360 }}
+          opts={{ renderer: "svg" }}
+        />
+      </CardContent>
+    </Card>
+  );
+}

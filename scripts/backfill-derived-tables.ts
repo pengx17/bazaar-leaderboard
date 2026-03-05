@@ -1,0 +1,105 @@
+// scripts/backfill-derived-tables.ts
+// One-time script to backfill snapshot_metrics for existing snapshots
+// that were created before the derived tables existed.
+// Run via: npx tsx scripts/backfill-derived-tables.ts
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+const CF_API_TOKEN = requireEnv("CLOUDFLARE_API_TOKEN");
+const CF_ACCOUNT_ID = requireEnv("CLOUDFLARE_ACCOUNT_ID");
+const D1_DATABASE_ID = requireEnv("D1_DATABASE_ID");
+
+const D1_API_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
+
+interface D1Response<T = unknown> {
+  success: boolean;
+  errors: Array<{ code: number; message: string }>;
+  result: Array<{
+    success: boolean;
+    results: T[];
+    meta: Record<string, unknown>;
+  }>;
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing: ${name}`);
+  return value;
+}
+
+function log(msg: string) {
+  console.log(`[${new Date().toISOString()}] ${msg}`);
+}
+
+async function queryD1<T = unknown>(sql: string, params?: unknown[]): Promise<T[]> {
+  const res = await fetch(D1_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${CF_API_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ sql, params }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`D1 API error (${res.status}): ${text}`);
+  }
+
+  const json = (await res.json()) as D1Response<T>;
+  if (!json.success) throw new Error(`D1 query failed: ${JSON.stringify(json.errors)}`);
+  return json.result[0]?.results ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Backfill snapshot_metrics
+// ---------------------------------------------------------------------------
+
+async function backfillMetrics(): Promise<void> {
+  // Find snapshots missing metrics
+  const missing = await queryD1<{ id: number }>(
+    `SELECT s.id FROM snapshots s
+     LEFT JOIN snapshot_metrics m ON m.snapshot_id = s.id
+     WHERE m.snapshot_id IS NULL AND s.total_entries > 1
+     ORDER BY s.id ASC`
+  );
+
+  log(`Found ${missing.length} snapshots missing metrics.`);
+
+  for (let i = 0; i < missing.length; i++) {
+    const sid = missing[i].id;
+
+    await queryD1(
+      `INSERT OR IGNORE INTO snapshot_metrics (snapshot_id, top1_rating, top10_rating, top100_rating, top1000_rating)
+       SELECT ?,
+         (SELECT rating FROM entries WHERE snapshot_id = ? AND position = 1),
+         (SELECT rating FROM entries WHERE snapshot_id = ? AND position <= 10 ORDER BY position DESC LIMIT 1),
+         (SELECT rating FROM entries WHERE snapshot_id = ? AND position <= 100 ORDER BY position DESC LIMIT 1),
+         (SELECT rating FROM entries WHERE snapshot_id = ? AND position <= 1000 ORDER BY position DESC LIMIT 1)`,
+      [sid, sid, sid, sid, sid]
+    );
+
+    if ((i + 1) % 50 === 0 || i === missing.length - 1) {
+      log(`  Metrics: ${i + 1}/${missing.length}`);
+    }
+  }
+
+  log("Metrics backfill complete.");
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main() {
+  log("=== Backfill Derived Tables Start ===");
+  await backfillMetrics();
+  log("=== Backfill Complete ===");
+}
+
+main().catch((err) => {
+  console.error("Fatal:", err);
+  process.exit(1);
+});
