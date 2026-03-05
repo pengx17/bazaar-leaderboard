@@ -51,12 +51,12 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     // Get top player (position = 1) from latest snapshot
     const topPlayer = await db
       .prepare(
-        `SELECT username, rating
+        `SELECT account_id, username, rating
          FROM entries
          WHERE snapshot_id = ? AND position = 1`
       )
       .bind(latestSnapshot.id)
-      .first<{ username: string; rating: number }>();
+      .first<{ account_id: string; username: string; rating: number }>();
 
     // Get bottom player (max position) from latest snapshot
     const bottomPlayer = await db
@@ -102,11 +102,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       if (topPlayer) {
         const topDelta = await db
           .prepare(
-            `SELECT d.prev_rating FROM snapshot_delta_24h d
-             JOIN entries e ON e.snapshot_id = d.snapshot_id AND e.account_id = d.account_id
-             WHERE d.snapshot_id = ? AND e.username = ?`
+            `SELECT prev_rating FROM snapshot_delta_24h
+             WHERE snapshot_id = ? AND account_id = ?`
           )
-          .bind(latestSnapshot.id, topPlayer.username)
+          .bind(latestSnapshot.id, topPlayer.account_id)
           .first<{ prev_rating: number }>();
         if (topDelta) dailyTopChange = topPlayer.rating - topDelta.prev_rating;
       }
@@ -150,8 +149,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       // Fallback: direct entries JOIN
       if (topPlayer) {
         const oldEntry = await db
-          .prepare(`SELECT rating FROM entries WHERE snapshot_id = ? AND username = ?`)
-          .bind(prevSnapshotId, topPlayer.username)
+          .prepare(`SELECT rating FROM entries WHERE snapshot_id = ? AND account_id = ?`)
+          .bind(prevSnapshotId, topPlayer.account_id)
           .first<{ rating: number }>();
         if (oldEntry) dailyTopChange = topPlayer.rating - oldEntry.rating;
       }
