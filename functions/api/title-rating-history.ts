@@ -35,12 +35,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       .prepare(
         `SELECT
            s.fetched_at AS time,
-           (SELECT MIN(e.rating) FROM entries e
-            WHERE e.snapshot_id = s.id AND e.position <= 10) AS top10,
-           (SELECT MIN(e.rating) FROM entries e
-            WHERE e.snapshot_id = s.id AND e.position <= 100) AS top100,
-           (SELECT MIN(e.rating) FROM entries e
-            WHERE e.snapshot_id = s.id AND e.position <= 1000) AS top1000
+           (SELECT e.rating FROM entries e
+            WHERE e.snapshot_id = s.id AND e.position <= 10
+            ORDER BY e.position DESC LIMIT 1) AS top10,
+           (SELECT e.rating FROM entries e
+            WHERE e.snapshot_id = s.id AND e.position <= 100
+            ORDER BY e.position DESC LIMIT 1) AS top100,
+           (SELECT e.rating FROM entries e
+            WHERE e.snapshot_id = s.id AND e.position <= 1000
+            ORDER BY e.position DESC LIMIT 1) AS top1000
          FROM snapshots s
          WHERE s.season_id = ? AND s.total_entries > 1
          ORDER BY s.fetched_at ASC`

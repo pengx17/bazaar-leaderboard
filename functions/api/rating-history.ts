@@ -42,7 +42,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         `SELECT s.fetched_at AS time, e.rating, e.position
          FROM entries e
          JOIN snapshots s ON s.id = e.snapshot_id
-         WHERE e.username LIKE ? AND s.season_id = ?
+         WHERE e.username = ? AND s.season_id = ?
          ORDER BY s.fetched_at ASC`
       )
       .bind(username, seasonId)
