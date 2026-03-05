@@ -2,7 +2,8 @@ CREATE TABLE IF NOT EXISTS snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   season_id INTEGER NOT NULL,
   fetched_at TEXT NOT NULL,
-  total_entries INTEGER NOT NULL
+  total_entries INTEGER NOT NULL,
+  content_hash TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_season ON snapshots(season_id, fetched_at);

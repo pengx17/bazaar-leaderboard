@@ -2,6 +2,8 @@
 // Fetches The Bazaar leaderboard data and stores it in Cloudflare D1.
 // Run via: npx tsx scripts/fetch-leaderboard.ts
 
+import { createHash } from "node:crypto";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -258,15 +260,16 @@ async function fetchLeaderboard(
 async function createSnapshot(
   seasonId: number,
   totalEntries: number,
-  fetchedAt: string
+  fetchedAt: string,
+  contentHash: string
 ): Promise<number> {
   log("Creating snapshot record...");
 
   const resp = await queryD1<{ id: number }>({
-    sql: `INSERT INTO snapshots (season_id, fetched_at, total_entries)
-          VALUES (?, ?, ?)
+    sql: `INSERT INTO snapshots (season_id, fetched_at, total_entries, content_hash)
+          VALUES (?, ?, ?, ?)
           RETURNING id`,
-    params: [seasonId, fetchedAt, totalEntries],
+    params: [seasonId, fetchedAt, totalEntries, contentHash],
   });
 
   const snapshotId = resp.result[0]?.results[0]?.id;
@@ -276,6 +279,31 @@ async function createSnapshot(
 
   log(`Created snapshot #${snapshotId}`);
   return snapshotId;
+}
+
+/** Compute a SHA-256 hash of sorted leaderboard entries for deduplication. */
+function computeContentHash(entries: LeaderboardEntry[]): string {
+  const sorted = [...entries].sort((a, b) => a.Position - b.Position);
+  const data = sorted
+    .map((e) => `${e.AccountId}:${e.Position}:${e.Rating}`)
+    .join("\n");
+  return createHash("sha256").update(data).digest("hex");
+}
+
+/** Check if the latest snapshot for this season has the same content hash. */
+async function isDuplicate(
+  seasonId: number,
+  contentHash: string
+): Promise<boolean> {
+  const resp = await queryD1<{ content_hash: string | null }>({
+    sql: `SELECT content_hash FROM snapshots
+          WHERE season_id = ?
+          ORDER BY fetched_at DESC
+          LIMIT 1`,
+    params: [seasonId],
+  });
+  const latestHash = resp.result[0]?.results[0]?.content_hash;
+  return latestHash === contentHash;
 }
 
 /** Escape a string for safe inline SQL (double single-quotes). */
@@ -446,17 +474,28 @@ async function main(): Promise<void> {
       throw new Error(`Leaderboard API returned empty data after ${MAX_RETRIES} attempts`);
     }
 
-    // 4. Store in D1
+    // 4. Check for duplicate content
+    const contentHash = computeContentHash(leaderboard.entries);
+    log(`Content hash: ${contentHash.slice(0, 12)}...`);
+
+    if (await isDuplicate(seasonId, contentHash)) {
+      log("Leaderboard data unchanged since last snapshot, skipping.");
+      log("=== Bazaar Leaderboard Fetch Complete (no changes) ===");
+      return;
+    }
+
+    // 5. Store in D1
     const fetchedAt = new Date().toISOString();
     const snapshotId = await createSnapshot(
       seasonId,
       leaderboard.totalEntries,
-      fetchedAt
+      fetchedAt,
+      contentHash
     );
 
     await storeEntries(snapshotId, leaderboard.entries);
 
-    // 5. Cleanup old seasons
+    // 6. Cleanup old seasons
     await cleanupOldSeasons();
 
     log("=== Bazaar Leaderboard Fetch Complete ===");
