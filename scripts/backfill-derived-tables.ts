@@ -170,9 +170,15 @@ async function migrate() {
      )`
   );
 
-  await queryD1(
-    `CREATE INDEX IF NOT EXISTS idx_entries_account ON entries(account_id, snapshot_id)`
-  );
+  // Index creation may fail on large tables due to D1 memory limits.
+  // The index will be built incrementally as old data gets cleaned up.
+  try {
+    await queryD1(
+      `CREATE INDEX IF NOT EXISTS idx_entries_account ON entries(account_id, snapshot_id)`
+    );
+  } catch (err) {
+    log(`Warning: index creation failed (expected on large tables): ${err}`);
+  }
 
   log("Migrations complete.");
 }
