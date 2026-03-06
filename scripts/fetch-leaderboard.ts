@@ -467,60 +467,57 @@ async function syncPlayerTables(
     log(`  Inserted ${changed.length} rows to player_history`);
   }
 
-  // 5. Compute 24h deltas for changed players and UPSERT to player_latest
+  // 5. Compute 24h baselines for ALL players and UPSERT/UPDATE player_latest
+  // Build baseline map for ALL players (not just changed ones)
+  const deltaMap = new Map<string, { position: number; rating: number }>();
+
+  if (baselineSnapshotId) {
+    // Query baselines from player_history for ALL players in batches
+    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+      const batch = entries.slice(i, i + BATCH_SIZE);
+      const accountIds = batch.map((e) => `'${sqlEscape(e.AccountId)}'`).join(", ");
+      const deltaResp = await queryD1<{
+        account_id: string;
+        position: number;
+        rating: number;
+      }>({
+        sql: `SELECT h.account_id, h.position, h.rating
+              FROM player_history h
+              WHERE h.season_id = ? AND h.account_id IN (${accountIds})
+                AND h.snapshot_id <= ?
+              ORDER BY h.snapshot_id DESC`,
+        params: [seasonId, baselineSnapshotId],
+      });
+
+      // Take only the latest row per account_id (results are ordered by snapshot_id DESC)
+      const rows = deltaResp.result[0]?.results ?? [];
+      for (const row of rows) {
+        if (!deltaMap.has(row.account_id)) {
+          deltaMap.set(row.account_id, {
+            position: row.position,
+            rating: row.rating,
+          });
+        }
+      }
+    }
+
+    // For players with no history entry at/before baseline, use their
+    // current player_latest values (they've been unchanged since before baseline)
+    for (const entry of entries) {
+      if (!deltaMap.has(entry.AccountId)) {
+        const prev = prevMap.get(entry.AccountId);
+        if (prev) {
+          deltaMap.set(entry.AccountId, {
+            position: prev.position,
+            rating: prev.rating,
+          });
+        }
+      }
+    }
+  }
+
+  // 5a. UPSERT changed players to player_latest (updates all fields + baselines)
   if (changed.length > 0) {
-    // Batch-query 24h-ago baselines from player_history for changed players
-    const deltaMap = new Map<string, { position: number; rating: number }>();
-
-    if (baselineSnapshotId) {
-      // Query in batches to avoid SQL size limits
-      for (let i = 0; i < changed.length; i += BATCH_SIZE) {
-        const batch = changed.slice(i, i + BATCH_SIZE);
-        const accountIds = batch.map((e) => `'${sqlEscape(e.AccountId)}'`).join(", ");
-        const deltaResp = await queryD1<{
-          account_id: string;
-          position: number;
-          rating: number;
-        }>({
-          sql: `SELECT h.account_id, h.position, h.rating
-                FROM player_history h
-                WHERE h.season_id = ? AND h.account_id IN (${accountIds})
-                  AND h.snapshot_id <= ?
-                ORDER BY h.snapshot_id DESC`,
-          params: [seasonId, baselineSnapshotId],
-        });
-
-        // Take only the latest row per account_id (results are ordered by snapshot_id DESC)
-        const rows = deltaResp.result[0]?.results ?? [];
-        for (const row of rows) {
-          if (!deltaMap.has(row.account_id)) {
-            deltaMap.set(row.account_id, {
-              position: row.position,
-              rating: row.rating,
-            });
-          }
-        }
-      }
-    }
-
-    // For changed players with no history entry before baseline,
-    // check if they exist in player_latest (unchanged for >24h)
-    if (baselineSnapshotId) {
-      for (const entry of changed) {
-        if (!deltaMap.has(entry.AccountId)) {
-          const prev = prevMap.get(entry.AccountId);
-          if (prev) {
-            // Player existed but had no history changes — use their latest values as baseline
-            deltaMap.set(entry.AccountId, {
-              position: prev.position,
-              rating: prev.rating,
-            });
-          }
-        }
-      }
-    }
-
-    // UPSERT to player_latest in batches
     for (let i = 0; i < changed.length; i += BATCH_SIZE) {
       const batch = changed.slice(i, i + BATCH_SIZE);
       const values = batch
@@ -536,7 +533,44 @@ async function syncPlayerTables(
         sql: `INSERT OR REPLACE INTO player_latest (season_id, account_id, username, position, rating, fetched_at, prev_position_24h, prev_rating_24h) VALUES ${values}`,
       });
     }
-    log(`  Upserted ${changed.length} rows to player_latest`);
+    log(`  Upserted ${changed.length} changed rows to player_latest`);
+  }
+
+  // 5b. UPDATE baselines for unchanged players
+  // These players already exist in player_latest but their prev_*_24h may be stale/NULL
+  if (baselineSnapshotId) {
+    const changedIds = new Set(changed.map((c) => c.AccountId));
+    const unchanged = entries.filter((e) => !changedIds.has(e.AccountId));
+    let updatedCount = 0;
+    for (let i = 0; i < unchanged.length; i += BATCH_SIZE) {
+      const batch = unchanged.slice(i, i + BATCH_SIZE);
+      // Use CASE expressions to update multiple rows in one query
+      const posCases: string[] = [];
+      const ratCases: string[] = [];
+      const ids: string[] = [];
+      for (const e of batch) {
+        const delta = deltaMap.get(e.AccountId);
+        if (delta) {
+          const escapedId = sqlEscape(e.AccountId);
+          ids.push(`'${escapedId}'`);
+          posCases.push(`WHEN '${escapedId}' THEN ${delta.position}`);
+          ratCases.push(`WHEN '${escapedId}' THEN ${delta.rating}`);
+        }
+      }
+      if (ids.length > 0) {
+        await queryD1({
+          sql: `UPDATE player_latest
+                SET prev_position_24h = CASE account_id ${posCases.join(" ")} END,
+                    prev_rating_24h = CASE account_id ${ratCases.join(" ")} END
+                WHERE season_id = ? AND account_id IN (${ids.join(", ")})`,
+          params: [seasonId],
+        });
+        updatedCount += ids.length;
+      }
+    }
+    if (updatedCount > 0) {
+      log(`  Updated baselines for ${updatedCount} unchanged players`);
+    }
   }
 
   // 6. Delete delisted players
