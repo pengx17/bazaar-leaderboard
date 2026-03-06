@@ -68,8 +68,8 @@ const TOKEN_REFRESH_THRESHOLD_MINUTES = 10;
 
 /** Number of entries to insert per D1 batch statement.
  * D1 HTTP API limits bound params to 100, so we inline values instead.
- * Each row is ~80 bytes → 1000 rows ≈ 80KB (under 100KB SQL limit). */
-const BATCH_SIZE = 1000;
+ * Keep batch small enough for D1's 100KB SQL statement limit. */
+const BATCH_SIZE = 200;
 
 // ---------------------------------------------------------------------------
 // Helpers
