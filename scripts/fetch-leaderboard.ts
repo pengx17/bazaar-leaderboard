@@ -120,19 +120,15 @@ async function addColumnIfMissing(
 // ---------------------------------------------------------------------------
 
 async function queryD1<T = unknown>(
-  statements: D1Statement | D1Statement[]
+  statement: D1Statement
 ): Promise<D1Response<T>> {
-  const body = Array.isArray(statements)
-    ? JSON.stringify(statements)
-    : JSON.stringify(statements);
-
   const res = await fetch(D1_API_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${CF_API_TOKEN}`,
       "Content-Type": "application/json",
     },
-    body,
+    body: JSON.stringify(statement),
   });
 
   if (!res.ok) {
@@ -532,22 +528,17 @@ async function backfillPlayerProgress(seasonId: number): Promise<void> {
   const progressEntries = Array.from(progressMap.entries());
   for (let i = 0; i < progressEntries.length; i += BATCH_SIZE) {
     const batch = progressEntries.slice(i, i + BATCH_SIZE);
-    await queryD1(
-      batch.map(([accountId, progress]) => ({
-        sql: `INSERT OR REPLACE INTO player_progress
-              (season_id, account_id, username, last_rating, estimated_games, current_win_streak, longest_win_streak)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          seasonId,
-          accountId,
-          progress.username,
-          progress.lastRating,
-          progress.estimatedGames,
-          progress.currentWinStreak,
-          progress.longestWinStreak,
-        ],
-      }))
-    );
+    const values = batch
+      .map(
+        ([accountId, progress]) =>
+          `(${seasonId}, '${sqlEscape(accountId)}', '${sqlEscape(progress.username)}', ${progress.lastRating ?? "NULL"}, ${progress.estimatedGames}, ${progress.currentWinStreak}, ${progress.longestWinStreak})`
+      )
+      .join(", ");
+    await queryD1({
+      sql: `INSERT OR REPLACE INTO player_progress
+            (season_id, account_id, username, last_rating, estimated_games, current_win_streak, longest_win_streak)
+            VALUES ${values}`,
+    });
   }
 
   const activeProgressEntries = progressEntries.filter(([accountId]) =>
@@ -555,20 +546,31 @@ async function backfillPlayerProgress(seasonId: number): Promise<void> {
   );
   for (let i = 0; i < activeProgressEntries.length; i += BATCH_SIZE) {
     const batch = activeProgressEntries.slice(i, i + BATCH_SIZE);
-    await queryD1(
-      batch.map(([accountId, progress]) => ({
-        sql: `UPDATE player_latest
-              SET estimated_games = ?, current_win_streak = ?, longest_win_streak = ?
-              WHERE season_id = ? AND account_id = ?`,
-        params: [
-          progress.estimatedGames,
-          progress.currentWinStreak,
-          progress.longestWinStreak,
-          seasonId,
-          accountId,
-        ],
-      }))
-    );
+    const ids: string[] = [];
+    const gameCases: string[] = [];
+    const currentStreakCases: string[] = [];
+    const longestStreakCases: string[] = [];
+
+    for (const [accountId, progress] of batch) {
+      const escapedId = sqlEscape(accountId);
+      ids.push(`'${escapedId}'`);
+      gameCases.push(`WHEN '${escapedId}' THEN ${progress.estimatedGames}`);
+      currentStreakCases.push(
+        `WHEN '${escapedId}' THEN ${progress.currentWinStreak}`
+      );
+      longestStreakCases.push(
+        `WHEN '${escapedId}' THEN ${progress.longestWinStreak}`
+      );
+    }
+
+    await queryD1({
+      sql: `UPDATE player_latest
+            SET estimated_games = CASE account_id ${gameCases.join(" ")} ELSE estimated_games END,
+                current_win_streak = CASE account_id ${currentStreakCases.join(" ")} ELSE current_win_streak END,
+                longest_win_streak = CASE account_id ${longestStreakCases.join(" ")} ELSE longest_win_streak END
+            WHERE season_id = ? AND account_id IN (${ids.join(", ")})`,
+      params: [seasonId],
+    });
   }
 
   log(`  Backfilled progress for ${progressEntries.length} players.`);
