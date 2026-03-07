@@ -1,3 +1,8 @@
+import {
+  computePlayerProgressFromHistory,
+  isMissingProgressColumnError,
+} from "../../shared/player-progress";
+
 interface Env {
   DB: D1Database;
 }
@@ -12,6 +17,95 @@ const corsHeaders = {
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: corsHeaders });
 };
+
+async function loadFallbackProgressMetrics(
+  db: D1Database,
+  seasonId: number
+): Promise<{
+  mostActive: { username: string; games: number } | null;
+  longestWinStreak: { username: string; streak: number } | null;
+}> {
+  const results = await db
+    .prepare(
+      `SELECT h.account_id, p.username, p.position, h.rating
+       FROM player_history h
+       JOIN player_latest p ON p.season_id = h.season_id AND p.account_id = h.account_id
+       WHERE h.season_id = ?
+       ORDER BY h.account_id ASC, h.snapshot_id ASC`
+    )
+    .bind(seasonId)
+    .all<{ account_id: string; username: string; position: number; rating: number }>();
+
+  let mostActive:
+    | { username: string; games: number; position: number }
+    | null = null;
+  let longestWinStreak:
+    | { username: string; streak: number; position: number }
+    | null = null;
+  let currentAccountId: string | null = null;
+  let currentUsername = "";
+  let currentPosition = Number.MAX_SAFE_INTEGER;
+  let currentHistory: Array<{ rating: number }> = [];
+
+  const flushCurrentHistory = () => {
+    if (!currentAccountId) return;
+
+    const progress = computePlayerProgressFromHistory(currentHistory);
+    if (
+      !mostActive ||
+      progress.estimatedGames > mostActive.games ||
+      (progress.estimatedGames === mostActive.games &&
+        currentPosition < mostActive.position)
+    ) {
+      mostActive = {
+        username: currentUsername,
+        games: progress.estimatedGames,
+        position: currentPosition,
+      };
+    }
+
+    if (
+      !longestWinStreak ||
+      progress.longestWinStreak > longestWinStreak.streak ||
+      (progress.longestWinStreak === longestWinStreak.streak &&
+        currentPosition < longestWinStreak.position)
+    ) {
+      longestWinStreak = {
+        username: currentUsername,
+        streak: progress.longestWinStreak,
+        position: currentPosition,
+      };
+    }
+  };
+
+  for (const row of results.results) {
+    if (row.account_id !== currentAccountId) {
+      flushCurrentHistory();
+      currentAccountId = row.account_id;
+      currentUsername = row.username;
+      currentPosition = row.position;
+      currentHistory = [{ rating: row.rating }];
+      continue;
+    }
+
+    currentHistory.push({ rating: row.rating });
+  }
+  flushCurrentHistory();
+
+  return {
+    mostActive:
+      mostActive && mostActive.games > 0
+        ? { username: mostActive.username, games: mostActive.games }
+        : null,
+    longestWinStreak:
+      longestWinStreak && longestWinStreak.streak > 1
+        ? {
+            username: longestWinStreak.username,
+            streak: longestWinStreak.streak,
+          }
+        : null,
+  };
+}
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const db = context.env.DB;
@@ -211,59 +305,38 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         .first<{ rating: number }>();
       if (median) medianRating = median.rating;
 
-      // Most active player (most history entries = most games played)
-      const active = await db
-        .prepare(
-          `SELECT p.username, COUNT(*) AS games
-           FROM player_history h
-           JOIN player_latest p ON p.season_id = h.season_id AND p.account_id = h.account_id
-           WHERE h.season_id = ?
-           GROUP BY h.account_id
-           ORDER BY games DESC LIMIT 1`
-        )
-        .bind(seasonId)
-        .first<{ username: string; games: number }>();
-      if (active && active.games > 1) mostActive = active;
-
-      // Longest win streak across all players
-      // Scan top 20 most active players (most likely to have long streaks)
-      const topActive = await db
-        .prepare(
-          `SELECT h.account_id, p.username
-           FROM player_history h
-           JOIN player_latest p ON p.season_id = h.season_id AND p.account_id = h.account_id
-           WHERE h.season_id = ?
-           GROUP BY h.account_id
-           HAVING COUNT(*) > 2
-           ORDER BY COUNT(*) DESC LIMIT 20`
-        )
-        .bind(seasonId)
-        .all<{ account_id: string; username: string }>();
-
-      for (const candidate of topActive.results) {
-        const hist = await db
+      try {
+        const active = await db
           .prepare(
-            `SELECT h.rating FROM player_history h
-             WHERE h.season_id = ? AND h.account_id = ?
-             ORDER BY h.snapshot_id ASC`
+            `SELECT username, estimated_games AS games
+             FROM player_latest
+             WHERE season_id = ?
+             ORDER BY estimated_games DESC, position ASC
+             LIMIT 1`
           )
-          .bind(seasonId, candidate.account_id)
-          .all<{ rating: number }>();
+          .bind(seasonId)
+          .first<{ username: string; games: number }>();
+        if (active && active.games > 0) mostActive = active;
 
-        let streak = 0;
-        let maxStreak = 0;
-        const rows = hist.results;
-        for (let i = 1; i < rows.length; i++) {
-          if (rows[i].rating > rows[i - 1].rating) {
-            streak++;
-            if (streak > maxStreak) maxStreak = streak;
-          } else {
-            streak = 0;
-          }
+        const streak = await db
+          .prepare(
+            `SELECT username, longest_win_streak AS streak
+             FROM player_latest
+             WHERE season_id = ?
+             ORDER BY longest_win_streak DESC, position ASC
+             LIMIT 1`
+          )
+          .bind(seasonId)
+          .first<{ username: string; streak: number }>();
+        if (streak && streak.streak > 1) longestWinStreak = streak;
+      } catch (err) {
+        if (!isMissingProgressColumnError(err)) {
+          throw err;
         }
-        if (maxStreak > (longestWinStreak?.streak ?? 0)) {
-          longestWinStreak = { username: candidate.username, streak: maxStreak };
-        }
+
+        const fallback = await loadFallbackProgressMetrics(db, seasonId);
+        mostActive = fallback.mostActive;
+        longestWinStreak = fallback.longestWinStreak;
       }
     } else {
       // Fallback: query entries table for old seasons

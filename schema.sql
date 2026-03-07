@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS player_latest (
   fetched_at TEXT NOT NULL,
   prev_position_24h INTEGER,
   prev_rating_24h INTEGER,
+  estimated_games INTEGER NOT NULL DEFAULT 0,
+  current_win_streak INTEGER NOT NULL DEFAULT 0,
+  longest_win_streak INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (season_id, account_id)
 );
 
@@ -49,4 +52,15 @@ CREATE TABLE IF NOT EXISTS player_history (
   position INTEGER NOT NULL,
   rating INTEGER NOT NULL,
   PRIMARY KEY (season_id, account_id, snapshot_id)
+);
+
+CREATE TABLE IF NOT EXISTS player_progress (
+  season_id INTEGER NOT NULL,
+  account_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  last_rating INTEGER,
+  estimated_games INTEGER NOT NULL DEFAULT 0,
+  current_win_streak INTEGER NOT NULL DEFAULT 0,
+  longest_win_streak INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (season_id, account_id)
 );
