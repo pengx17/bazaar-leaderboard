@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "3295250914fc",
+  "session_id": "e6f38325-b7eb-4948-bde2-a1ea36c05a58",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-07T04:52:41.839732Z",
+  "branch": "fix/backfill-d1-batch",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "scripts/fetch-leaderboard.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "8fe1c8fa7823",
+  "token_usage": {
+    "input_tokens": 71,
+    "cache_creation_tokens": 247457,
+    "cache_read_tokens": 2919966,
+    "output_tokens": 11830,
+    "api_call_count": 45
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-07T04:52:41.549591Z",
+    "agent_lines": 36,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 36,
+    "agent_percentage": 100
+  }
+}

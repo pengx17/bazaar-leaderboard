@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "3295250914fc",
+  "strategy": "manual-commit",
+  "branch": "fix/backfill-d1-batch",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "scripts/fetch-leaderboard.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/32/95250914fc/0/metadata.json",
+      "transcript": "/32/95250914fc/0/full.jsonl",
+      "context": "/32/95250914fc/0/context.md",
+      "content_hash": "/32/95250914fc/0/content_hash.txt",
+      "prompt": "/32/95250914fc/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 71,
+    "cache_creation_tokens": 247457,
+    "cache_read_tokens": 2919966,
+    "output_tokens": 11830,
+    "api_call_count": 45
+  }
+}
