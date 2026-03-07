@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS player_latest (
   prev_position_24h INTEGER,
   prev_rating_24h INTEGER,
   estimated_games INTEGER NOT NULL DEFAULT 0,
+  current_win_streak INTEGER NOT NULL DEFAULT 0,
   longest_win_streak INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (season_id, account_id)
 );

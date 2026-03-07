@@ -4,6 +4,7 @@ export interface RatingPointLike {
 
 export interface PlayerProgress {
   estimatedGames: number;
+  currentWinStreak: number;
   longestWinStreak: number;
 }
 
@@ -38,6 +39,35 @@ export function computePlayerProgressFromHistory<T extends RatingPointLike>(
 
   return {
     estimatedGames,
+    currentWinStreak,
     longestWinStreak,
+  };
+}
+
+export function advancePlayerProgress(
+  previous: PlayerProgress,
+  previousRating: number | null,
+  nextRating: number
+): PlayerProgress {
+  if (previousRating == null || nextRating === previousRating) {
+    return previous;
+  }
+
+  if (nextRating > previousRating) {
+    const currentWinStreak = previous.currentWinStreak + 1;
+    return {
+      estimatedGames: previous.estimatedGames + 1,
+      currentWinStreak,
+      longestWinStreak: Math.max(
+        previous.longestWinStreak,
+        currentWinStreak
+      ),
+    };
+  }
+
+  return {
+    estimatedGames: previous.estimatedGames + 1,
+    currentWinStreak: 0,
+    longestWinStreak: previous.longestWinStreak,
   };
 }

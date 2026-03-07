@@ -2,7 +2,10 @@
 // Fetches The Bazaar leaderboard data and stores it in Cloudflare D1.
 // Run via: npx tsx scripts/fetch-leaderboard.ts
 
-import { computePlayerProgressFromHistory } from "../shared/player-progress";
+import {
+  advancePlayerProgress,
+  computePlayerProgressFromHistory,
+} from "../shared/player-progress";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,13 +93,26 @@ function log(message: string): void {
   console.log(`[${ts}] ${message}`);
 }
 
-function isDuplicateColumnError(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    /duplicate column name: (status|estimated_games|longest_win_streak)/i.test(
-      err.message
-    )
-  );
+function isDuplicateColumnError(err: unknown, columnName: string): boolean {
+  return err instanceof Error &&
+    new RegExp(`duplicate column name: ${columnName}`, "i").test(err.message);
+}
+
+async function addColumnIfMissing(
+  columnName: string,
+  sql: string,
+  successMessage: string
+): Promise<boolean> {
+  try {
+    await queryD1({ sql });
+    log(successMessage);
+    return true;
+  } catch (err) {
+    if (!isDuplicateColumnError(err, columnName)) {
+      throw err;
+    }
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -137,20 +153,15 @@ async function queryD1<T = unknown>(
 // Schema migration
 // ---------------------------------------------------------------------------
 
-async function migrateSchema(): Promise<void> {
+async function migrateSchema(): Promise<{ needsPlayerProgressBackfill: boolean }> {
   log("Running schema migrations...");
 
   // Add status column to snapshots (idempotent: ignore if exists)
-  try {
-    await queryD1({
-      sql: `ALTER TABLE snapshots ADD COLUMN status TEXT NOT NULL DEFAULT 'ready'`,
-    });
-    log("Added status column to snapshots.");
-  } catch (err) {
-    if (!isDuplicateColumnError(err)) {
-      throw err;
-    }
-  }
+  await addColumnIfMissing(
+    "status",
+    `ALTER TABLE snapshots ADD COLUMN status TEXT NOT NULL DEFAULT 'ready'`,
+    "Added status column to snapshots."
+  );
 
   await queryD1({
     sql: `CREATE TABLE IF NOT EXISTS player_latest (
@@ -163,32 +174,27 @@ async function migrateSchema(): Promise<void> {
       prev_position_24h INTEGER,
       prev_rating_24h INTEGER,
       estimated_games INTEGER NOT NULL DEFAULT 0,
+      current_win_streak INTEGER NOT NULL DEFAULT 0,
       longest_win_streak INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (season_id, account_id)
     )`,
   });
 
-  try {
-    await queryD1({
-      sql: `ALTER TABLE player_latest ADD COLUMN estimated_games INTEGER NOT NULL DEFAULT 0`,
-    });
-    log("Added estimated_games column to player_latest.");
-  } catch (err) {
-    if (!isDuplicateColumnError(err)) {
-      throw err;
-    }
-  }
-
-  try {
-    await queryD1({
-      sql: `ALTER TABLE player_latest ADD COLUMN longest_win_streak INTEGER NOT NULL DEFAULT 0`,
-    });
-    log("Added longest_win_streak column to player_latest.");
-  } catch (err) {
-    if (!isDuplicateColumnError(err)) {
-      throw err;
-    }
-  }
+  const estimatedGamesAdded = await addColumnIfMissing(
+    "estimated_games",
+    `ALTER TABLE player_latest ADD COLUMN estimated_games INTEGER NOT NULL DEFAULT 0`,
+    "Added estimated_games column to player_latest."
+  );
+  const currentWinStreakAdded = await addColumnIfMissing(
+    "current_win_streak",
+    `ALTER TABLE player_latest ADD COLUMN current_win_streak INTEGER NOT NULL DEFAULT 0`,
+    "Added current_win_streak column to player_latest."
+  );
+  const longestWinStreakAdded = await addColumnIfMissing(
+    "longest_win_streak",
+    `ALTER TABLE player_latest ADD COLUMN longest_win_streak INTEGER NOT NULL DEFAULT 0`,
+    "Added longest_win_streak column to player_latest."
+  );
 
   await queryD1({
     sql: `CREATE INDEX IF NOT EXISTS idx_player_latest_position ON player_latest(season_id, position)`,
@@ -210,6 +216,10 @@ async function migrateSchema(): Promise<void> {
   });
 
   log("Schema migrations complete.");
+  return {
+    needsPlayerProgressBackfill:
+      estimatedGamesAdded || currentWinStreakAdded || longestWinStreakAdded,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -423,10 +433,13 @@ interface PlayerLatestRow {
   username: string;
   position: number;
   rating: number;
+  estimated_games: number;
+  current_win_streak: number;
+  longest_win_streak: number;
 }
 
-async function recomputePlayerProgress(seasonId: number): Promise<void> {
-  log("Recomputing player progress stats...");
+async function backfillPlayerProgress(seasonId: number): Promise<void> {
+  log("Backfilling player progress stats...");
 
   const currentResp = await queryD1<{ account_id: string }>({
     sql: `SELECT account_id FROM player_latest WHERE season_id = ?`,
@@ -441,7 +454,7 @@ async function recomputePlayerProgress(seasonId: number): Promise<void> {
   const progressMap = new Map(
     currentRows.map((row) => [
       row.account_id,
-      { estimatedGames: 0, longestWinStreak: 0 },
+      { estimatedGames: 0, currentWinStreak: 0, longestWinStreak: 0 },
     ])
   );
 
@@ -486,10 +499,11 @@ async function recomputePlayerProgress(seasonId: number): Promise<void> {
     await queryD1(
       batch.map(([accountId, progress]) => ({
         sql: `UPDATE player_latest
-              SET estimated_games = ?, longest_win_streak = ?
+              SET estimated_games = ?, current_win_streak = ?, longest_win_streak = ?
               WHERE season_id = ? AND account_id = ?`,
         params: [
           progress.estimatedGames,
+          progress.currentWinStreak,
           progress.longestWinStreak,
           seasonId,
           accountId,
@@ -498,7 +512,7 @@ async function recomputePlayerProgress(seasonId: number): Promise<void> {
     );
   }
 
-  log(`  Recomputed progress for ${progressEntries.length} players.`);
+  log(`  Backfilled progress for ${progressEntries.length} players.`);
 }
 
 async function syncPlayerTables(
@@ -511,7 +525,9 @@ async function syncPlayerTables(
 
   // 1. Read current player_latest for this season
   const prevResp = await queryD1<PlayerLatestRow>({
-    sql: `SELECT account_id, username, position, rating FROM player_latest WHERE season_id = ?`,
+    sql: `SELECT account_id, username, position, rating, estimated_games, current_win_streak, longest_win_streak
+          FROM player_latest
+          WHERE season_id = ?`,
     params: [seasonId],
   });
   const prevRows = prevResp.result[0]?.results ?? [];
@@ -636,14 +652,30 @@ async function syncPlayerTables(
       const values = batch
         .map((e) => {
           const delta = deltaMap.get(e.AccountId);
+          const prev = prevMap.get(e.AccountId);
+          const progress = advancePlayerProgress(
+            prev
+              ? {
+                  estimatedGames: prev.estimated_games,
+                  currentWinStreak: prev.current_win_streak,
+                  longestWinStreak: prev.longest_win_streak,
+                }
+              : {
+                  estimatedGames: 0,
+                  currentWinStreak: 0,
+                  longestWinStreak: 0,
+                },
+            prev?.rating ?? null,
+            e.Rating
+          );
           const prevPos = delta ? delta.position : "NULL";
           const prevRat = delta ? delta.rating : "NULL";
-          return `(${seasonId}, '${sqlEscape(e.AccountId)}', '${sqlEscape(e.Username)}', ${e.Position}, ${e.Rating}, '${sqlEscape(fetchedAt)}', ${prevPos}, ${prevRat})`;
+          return `(${seasonId}, '${sqlEscape(e.AccountId)}', '${sqlEscape(e.Username)}', ${e.Position}, ${e.Rating}, '${sqlEscape(fetchedAt)}', ${prevPos}, ${prevRat}, ${progress.estimatedGames}, ${progress.currentWinStreak}, ${progress.longestWinStreak})`;
         })
         .join(", ");
 
       await queryD1({
-        sql: `INSERT OR REPLACE INTO player_latest (season_id, account_id, username, position, rating, fetched_at, prev_position_24h, prev_rating_24h) VALUES ${values}`,
+        sql: `INSERT OR REPLACE INTO player_latest (season_id, account_id, username, position, rating, fetched_at, prev_position_24h, prev_rating_24h, estimated_games, current_win_streak, longest_win_streak) VALUES ${values}`,
       });
     }
     log(`  Upserted ${changed.length} changed rows to player_latest`);
@@ -811,7 +843,7 @@ async function main(): Promise<void> {
 
   try {
     // 0. Run migrations
-    await migrateSchema();
+    const { needsPlayerProgressBackfill } = await migrateSchema();
 
     // 1. Get a valid access token (refresh if needed)
     const accessToken = await ensureValidToken();
@@ -861,8 +893,10 @@ async function main(): Promise<void> {
     // 7. Sync player tables
     await syncPlayerTables(snapshotId, seasonId, fetchedAt, entries);
 
-    // 8. Recompute per-player progress stats from season history
-    await recomputePlayerProgress(seasonId);
+    // 8. Backfill progress once when these derived columns are first introduced.
+    if (needsPlayerProgressBackfill) {
+      await backfillPlayerProgress(seasonId);
+    }
 
     // 9. Mark snapshot ready
     await markSnapshotReady(snapshotId);
