@@ -723,25 +723,30 @@ async function syncPlayerTables(
   if (changed.length > 0) {
     for (let i = 0; i < changed.length; i += BATCH_SIZE) {
       const batch = changed.slice(i, i + BATCH_SIZE);
-      const values = batch
-        .map((e) => {
-          const delta = deltaMap.get(e.AccountId);
-          const prev = progressMap.get(e.AccountId);
-          const progress = advancePlayerProgress(
-            prev
-              ? {
-                  estimatedGames: prev.estimated_games,
-                  currentWinStreak: prev.current_win_streak,
-                  longestWinStreak: prev.longest_win_streak,
-                }
-              : {
-                  estimatedGames: 0,
-                  currentWinStreak: 0,
-                  longestWinStreak: 0,
-                },
-            prev?.last_rating ?? null,
-            e.Rating
-          );
+      const computedBatch = batch.map((e) => {
+        const delta = deltaMap.get(e.AccountId);
+        const prev = progressMap.get(e.AccountId);
+        const progress = advancePlayerProgress(
+          prev
+            ? {
+                estimatedGames: prev.estimated_games,
+                currentWinStreak: prev.current_win_streak,
+                longestWinStreak: prev.longest_win_streak,
+              }
+            : {
+                estimatedGames: 0,
+                currentWinStreak: 0,
+                longestWinStreak: 0,
+              },
+          prev?.last_rating ?? null,
+          e.Rating
+        );
+        return { entry: e, delta, progress };
+      });
+
+      const latestValues = computedBatch
+        .map(({ entry, delta, progress }) => {
+          const e = entry;
           const prevPos = delta ? delta.position : "NULL";
           const prevRat = delta ? delta.rating : "NULL";
           return `(${seasonId}, '${sqlEscape(e.AccountId)}', '${sqlEscape(e.Username)}', ${e.Position}, ${e.Rating}, '${sqlEscape(fetchedAt)}', ${prevPos}, ${prevRat}, ${progress.estimatedGames}, ${progress.currentWinStreak}, ${progress.longestWinStreak})`;
@@ -749,31 +754,12 @@ async function syncPlayerTables(
         .join(", ");
 
       await queryD1({
-        sql: `INSERT OR REPLACE INTO player_latest (season_id, account_id, username, position, rating, fetched_at, prev_position_24h, prev_rating_24h, estimated_games, current_win_streak, longest_win_streak) VALUES ${values}`,
+        sql: `INSERT OR REPLACE INTO player_latest (season_id, account_id, username, position, rating, fetched_at, prev_position_24h, prev_rating_24h, estimated_games, current_win_streak, longest_win_streak) VALUES ${latestValues}`,
       });
-    }
-    log(`  Upserted ${changed.length} changed rows to player_latest`);
 
-    for (let i = 0; i < changed.length; i += BATCH_SIZE) {
-      const batch = changed.slice(i, i + BATCH_SIZE);
-      const values = batch
-        .map((e) => {
-          const prev = progressMap.get(e.AccountId);
-          const progress = advancePlayerProgress(
-            prev
-              ? {
-                  estimatedGames: prev.estimated_games,
-                  currentWinStreak: prev.current_win_streak,
-                  longestWinStreak: prev.longest_win_streak,
-                }
-              : {
-                  estimatedGames: 0,
-                  currentWinStreak: 0,
-                  longestWinStreak: 0,
-                },
-            prev?.last_rating ?? null,
-            e.Rating
-          );
+      const progressValues = computedBatch
+        .map(({ entry, progress }) => {
+          const e = entry;
           progressMap.set(e.AccountId, {
             account_id: e.AccountId,
             username: e.Username,
@@ -789,9 +775,10 @@ async function syncPlayerTables(
       await queryD1({
         sql: `INSERT OR REPLACE INTO player_progress
               (season_id, account_id, username, last_rating, estimated_games, current_win_streak, longest_win_streak)
-              VALUES ${values}`,
+              VALUES ${progressValues}`,
       });
     }
+    log(`  Upserted ${changed.length} changed rows to player_latest`);
     log(`  Upserted ${changed.length} changed rows to player_progress`);
   }
 
