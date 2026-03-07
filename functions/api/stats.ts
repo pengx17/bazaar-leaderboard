@@ -1,4 +1,7 @@
-import { computePlayerProgressFromHistory } from "../../shared/player-progress";
+import {
+  computePlayerProgressFromHistory,
+  isMissingProgressColumnError,
+} from "../../shared/player-progress";
 
 interface Env {
   DB: D1Database;
@@ -14,13 +17,6 @@ const corsHeaders = {
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: corsHeaders });
 };
-
-function isMissingProgressColumnError(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    /no such column: (estimated_games|longest_win_streak)/i.test(err.message)
-  );
-}
 
 async function loadFallbackProgressMetrics(
   db: D1Database,
@@ -56,9 +52,10 @@ async function loadFallbackProgressMetrics(
 
     const progress = computePlayerProgressFromHistory(currentHistory);
     if (
-      progress.estimatedGames > (mostActive?.games ?? 0) ||
-      (progress.estimatedGames === (mostActive?.games ?? -1) &&
-        currentPosition < (mostActive?.position ?? Number.MAX_SAFE_INTEGER))
+      !mostActive ||
+      progress.estimatedGames > mostActive.games ||
+      (progress.estimatedGames === mostActive.games &&
+        currentPosition < mostActive.position)
     ) {
       mostActive = {
         username: currentUsername,
@@ -68,10 +65,10 @@ async function loadFallbackProgressMetrics(
     }
 
     if (
-      progress.longestWinStreak > (longestWinStreak?.streak ?? 0) ||
-      (progress.longestWinStreak === (longestWinStreak?.streak ?? -1) &&
-        currentPosition <
-          (longestWinStreak?.position ?? Number.MAX_SAFE_INTEGER))
+      !longestWinStreak ||
+      progress.longestWinStreak > longestWinStreak.streak ||
+      (progress.longestWinStreak === longestWinStreak.streak &&
+        currentPosition < longestWinStreak.position)
     ) {
       longestWinStreak = {
         username: currentUsername,

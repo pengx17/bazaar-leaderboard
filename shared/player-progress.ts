@@ -4,8 +4,14 @@ export interface RatingPointLike {
 
 export interface PlayerProgress {
   estimatedGames: number;
-  currentWinStreak: number;
   longestWinStreak: number;
+}
+
+export function isMissingProgressColumnError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /no such column: (estimated_games|longest_win_streak)/i.test(err.message)
+  );
 }
 
 export function computePlayerProgressFromHistory<T extends RatingPointLike>(
@@ -32,7 +38,6 @@ export function computePlayerProgressFromHistory<T extends RatingPointLike>(
 
   return {
     estimatedGames,
-    currentWinStreak,
     longestWinStreak,
   };
 }

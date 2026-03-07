@@ -90,6 +90,15 @@ function log(message: string): void {
   console.log(`[${ts}] ${message}`);
 }
 
+function isDuplicateColumnError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /duplicate column name: (status|estimated_games|longest_win_streak)/i.test(
+      err.message
+    )
+  );
+}
+
 // ---------------------------------------------------------------------------
 // D1 HTTP helpers
 // ---------------------------------------------------------------------------
@@ -137,8 +146,10 @@ async function migrateSchema(): Promise<void> {
       sql: `ALTER TABLE snapshots ADD COLUMN status TEXT NOT NULL DEFAULT 'ready'`,
     });
     log("Added status column to snapshots.");
-  } catch {
-    // Column already exists — expected
+  } catch (err) {
+    if (!isDuplicateColumnError(err)) {
+      throw err;
+    }
   }
 
   await queryD1({
@@ -152,7 +163,6 @@ async function migrateSchema(): Promise<void> {
       prev_position_24h INTEGER,
       prev_rating_24h INTEGER,
       estimated_games INTEGER NOT NULL DEFAULT 0,
-      current_win_streak INTEGER NOT NULL DEFAULT 0,
       longest_win_streak INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (season_id, account_id)
     )`,
@@ -163,17 +173,10 @@ async function migrateSchema(): Promise<void> {
       sql: `ALTER TABLE player_latest ADD COLUMN estimated_games INTEGER NOT NULL DEFAULT 0`,
     });
     log("Added estimated_games column to player_latest.");
-  } catch {
-    // Column already exists — expected
-  }
-
-  try {
-    await queryD1({
-      sql: `ALTER TABLE player_latest ADD COLUMN current_win_streak INTEGER NOT NULL DEFAULT 0`,
-    });
-    log("Added current_win_streak column to player_latest.");
-  } catch {
-    // Column already exists — expected
+  } catch (err) {
+    if (!isDuplicateColumnError(err)) {
+      throw err;
+    }
   }
 
   try {
@@ -181,8 +184,10 @@ async function migrateSchema(): Promise<void> {
       sql: `ALTER TABLE player_latest ADD COLUMN longest_win_streak INTEGER NOT NULL DEFAULT 0`,
     });
     log("Added longest_win_streak column to player_latest.");
-  } catch {
-    // Column already exists — expected
+  } catch (err) {
+    if (!isDuplicateColumnError(err)) {
+      throw err;
+    }
   }
 
   await queryD1({
@@ -436,7 +441,7 @@ async function recomputePlayerProgress(seasonId: number): Promise<void> {
   const progressMap = new Map(
     currentRows.map((row) => [
       row.account_id,
-      { estimatedGames: 0, currentWinStreak: 0, longestWinStreak: 0 },
+      { estimatedGames: 0, longestWinStreak: 0 },
     ])
   );
 
@@ -478,31 +483,19 @@ async function recomputePlayerProgress(seasonId: number): Promise<void> {
   const progressEntries = Array.from(progressMap.entries());
   for (let i = 0; i < progressEntries.length; i += BATCH_SIZE) {
     const batch = progressEntries.slice(i, i + BATCH_SIZE);
-    const ids: string[] = [];
-    const gameCases: string[] = [];
-    const currentStreakCases: string[] = [];
-    const longestStreakCases: string[] = [];
-
-    for (const [accountId, progress] of batch) {
-      const escapedId = sqlEscape(accountId);
-      ids.push(`'${escapedId}'`);
-      gameCases.push(`WHEN '${escapedId}' THEN ${progress.estimatedGames}`);
-      currentStreakCases.push(
-        `WHEN '${escapedId}' THEN ${progress.currentWinStreak}`
-      );
-      longestStreakCases.push(
-        `WHEN '${escapedId}' THEN ${progress.longestWinStreak}`
-      );
-    }
-
-    await queryD1({
-      sql: `UPDATE player_latest
-            SET estimated_games = CASE account_id ${gameCases.join(" ")} END,
-                current_win_streak = CASE account_id ${currentStreakCases.join(" ")} END,
-                longest_win_streak = CASE account_id ${longestStreakCases.join(" ")} END
-            WHERE season_id = ? AND account_id IN (${ids.join(", ")})`,
-      params: [seasonId],
-    });
+    await queryD1(
+      batch.map(([accountId, progress]) => ({
+        sql: `UPDATE player_latest
+              SET estimated_games = ?, longest_win_streak = ?
+              WHERE season_id = ? AND account_id = ?`,
+        params: [
+          progress.estimatedGames,
+          progress.longestWinStreak,
+          seasonId,
+          accountId,
+        ],
+      }))
+    );
   }
 
   log(`  Recomputed progress for ${progressEntries.length} players.`);
@@ -680,8 +673,8 @@ async function syncPlayerTables(
       if (ids.length > 0) {
         await queryD1({
           sql: `UPDATE player_latest
-                SET prev_position_24h = CASE account_id ${posCases.join(" ")} END,
-                    prev_rating_24h = CASE account_id ${ratCases.join(" ")} END
+                SET prev_position_24h = CASE account_id ${posCases.join(" ")} ELSE prev_position_24h END,
+                    prev_rating_24h = CASE account_id ${ratCases.join(" ")} ELSE prev_rating_24h END
                 WHERE season_id = ? AND account_id IN (${ids.join(", ")})`,
           params: [seasonId],
         });

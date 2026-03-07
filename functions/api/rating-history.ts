@@ -1,4 +1,7 @@
-import { computePlayerProgressFromHistory } from "../../shared/player-progress";
+import {
+  computePlayerProgressFromHistory,
+  isMissingProgressColumnError,
+} from "../../shared/player-progress";
 
 interface Env {
   DB: D1Database;
@@ -14,13 +17,6 @@ const corsHeaders = {
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: corsHeaders });
 };
-
-function isMissingProgressColumnError(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    /no such column: (estimated_games|longest_win_streak)/i.test(err.message)
-  );
-}
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const db = context.env.DB;
