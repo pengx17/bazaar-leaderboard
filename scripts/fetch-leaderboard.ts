@@ -120,19 +120,15 @@ async function addColumnIfMissing(
 // ---------------------------------------------------------------------------
 
 async function queryD1<T = unknown>(
-  statements: D1Statement | D1Statement[]
+  statement: D1Statement
 ): Promise<D1Response<T>> {
-  const body = Array.isArray(statements)
-    ? JSON.stringify(statements)
-    : JSON.stringify(statements);
-
   const res = await fetch(D1_API_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${CF_API_TOKEN}`,
       "Content-Type": "application/json",
     },
-    body,
+    body: JSON.stringify(statement),
   });
 
   if (!res.ok) {
