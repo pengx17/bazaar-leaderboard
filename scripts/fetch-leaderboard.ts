@@ -2,6 +2,8 @@
 // Fetches The Bazaar leaderboard data and stores it in Cloudflare D1.
 // Run via: npx tsx scripts/fetch-leaderboard.ts
 
+import { computePlayerProgressFromHistory } from "../shared/player-progress";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -149,9 +151,39 @@ async function migrateSchema(): Promise<void> {
       fetched_at TEXT NOT NULL,
       prev_position_24h INTEGER,
       prev_rating_24h INTEGER,
+      estimated_games INTEGER NOT NULL DEFAULT 0,
+      current_win_streak INTEGER NOT NULL DEFAULT 0,
+      longest_win_streak INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (season_id, account_id)
     )`,
   });
+
+  try {
+    await queryD1({
+      sql: `ALTER TABLE player_latest ADD COLUMN estimated_games INTEGER NOT NULL DEFAULT 0`,
+    });
+    log("Added estimated_games column to player_latest.");
+  } catch {
+    // Column already exists — expected
+  }
+
+  try {
+    await queryD1({
+      sql: `ALTER TABLE player_latest ADD COLUMN current_win_streak INTEGER NOT NULL DEFAULT 0`,
+    });
+    log("Added current_win_streak column to player_latest.");
+  } catch {
+    // Column already exists — expected
+  }
+
+  try {
+    await queryD1({
+      sql: `ALTER TABLE player_latest ADD COLUMN longest_win_streak INTEGER NOT NULL DEFAULT 0`,
+    });
+    log("Added longest_win_streak column to player_latest.");
+  } catch {
+    // Column already exists — expected
+  }
 
   await queryD1({
     sql: `CREATE INDEX IF NOT EXISTS idx_player_latest_position ON player_latest(season_id, position)`,
@@ -386,6 +418,94 @@ interface PlayerLatestRow {
   username: string;
   position: number;
   rating: number;
+}
+
+async function recomputePlayerProgress(seasonId: number): Promise<void> {
+  log("Recomputing player progress stats...");
+
+  const currentResp = await queryD1<{ account_id: string }>({
+    sql: `SELECT account_id FROM player_latest WHERE season_id = ?`,
+    params: [seasonId],
+  });
+  const currentRows = currentResp.result[0]?.results ?? [];
+  if (currentRows.length === 0) {
+    log("  No current players found, skipping progress recompute.");
+    return;
+  }
+
+  const progressMap = new Map(
+    currentRows.map((row) => [
+      row.account_id,
+      { estimatedGames: 0, currentWinStreak: 0, longestWinStreak: 0 },
+    ])
+  );
+
+  const historyResp = await queryD1<{ account_id: string; rating: number }>({
+    sql: `SELECT account_id, rating
+          FROM player_history
+          WHERE season_id = ?
+          ORDER BY account_id ASC, snapshot_id ASC`,
+    params: [seasonId],
+  });
+  const historyRows = historyResp.result[0]?.results ?? [];
+
+  let currentAccountId: string | null = null;
+  let currentHistory: Array<{ rating: number }> = [];
+
+  const flushCurrentHistory = () => {
+    if (!currentAccountId || !progressMap.has(currentAccountId)) {
+      return;
+    }
+
+    progressMap.set(
+      currentAccountId,
+      computePlayerProgressFromHistory(currentHistory)
+    );
+  };
+
+  for (const row of historyRows) {
+    if (row.account_id !== currentAccountId) {
+      flushCurrentHistory();
+      currentAccountId = row.account_id;
+      currentHistory = [{ rating: row.rating }];
+      continue;
+    }
+
+    currentHistory.push({ rating: row.rating });
+  }
+  flushCurrentHistory();
+
+  const progressEntries = Array.from(progressMap.entries());
+  for (let i = 0; i < progressEntries.length; i += BATCH_SIZE) {
+    const batch = progressEntries.slice(i, i + BATCH_SIZE);
+    const ids: string[] = [];
+    const gameCases: string[] = [];
+    const currentStreakCases: string[] = [];
+    const longestStreakCases: string[] = [];
+
+    for (const [accountId, progress] of batch) {
+      const escapedId = sqlEscape(accountId);
+      ids.push(`'${escapedId}'`);
+      gameCases.push(`WHEN '${escapedId}' THEN ${progress.estimatedGames}`);
+      currentStreakCases.push(
+        `WHEN '${escapedId}' THEN ${progress.currentWinStreak}`
+      );
+      longestStreakCases.push(
+        `WHEN '${escapedId}' THEN ${progress.longestWinStreak}`
+      );
+    }
+
+    await queryD1({
+      sql: `UPDATE player_latest
+            SET estimated_games = CASE account_id ${gameCases.join(" ")} END,
+                current_win_streak = CASE account_id ${currentStreakCases.join(" ")} END,
+                longest_win_streak = CASE account_id ${longestStreakCases.join(" ")} END
+            WHERE season_id = ? AND account_id IN (${ids.join(", ")})`,
+      params: [seasonId],
+    });
+  }
+
+  log(`  Recomputed progress for ${progressEntries.length} players.`);
 }
 
 async function syncPlayerTables(
@@ -748,10 +868,13 @@ async function main(): Promise<void> {
     // 7. Sync player tables
     await syncPlayerTables(snapshotId, seasonId, fetchedAt, entries);
 
-    // 8. Mark snapshot ready
+    // 8. Recompute per-player progress stats from season history
+    await recomputePlayerProgress(seasonId);
+
+    // 9. Mark snapshot ready
     await markSnapshotReady(snapshotId);
 
-    // 9. Cleanup old seasons
+    // 10. Cleanup old seasons
     await cleanupOldSeasons();
 
     log("=== Bazaar Leaderboard Fetch Complete ===");

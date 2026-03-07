@@ -1,3 +1,5 @@
+import { computePlayerProgressFromHistory } from "../../shared/player-progress";
+
 interface Env {
   DB: D1Database;
 }
@@ -12,6 +14,13 @@ const corsHeaders = {
 export const onRequestOptions: PagesFunction<Env> = async () => {
   return new Response(null, { status: 204, headers: corsHeaders });
 };
+
+function isMissingProgressColumnError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /no such column: (estimated_games|longest_win_streak)/i.test(err.message)
+  );
+}
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const db = context.env.DB;
@@ -48,13 +57,40 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       .first<{ start: string | null; end: string | null }>();
 
     // Resolve username -> account_id via player_latest
-    const player = await db
-      .prepare(
-        `SELECT account_id FROM player_latest
-         WHERE season_id = ? AND username = ?`
-      )
-      .bind(seasonId, username)
-      .first<{ account_id: string }>();
+    let player:
+      | {
+          account_id: string;
+          estimated_games?: number;
+          longest_win_streak?: number;
+        }
+      | null = null;
+    try {
+      player = await db
+        .prepare(
+          `SELECT account_id, estimated_games, longest_win_streak
+           FROM player_latest
+           WHERE season_id = ? AND username = ?`
+        )
+        .bind(seasonId, username)
+        .first<{
+          account_id: string;
+          estimated_games: number;
+          longest_win_streak: number;
+        }>();
+    } catch (err) {
+      if (!isMissingProgressColumnError(err)) {
+        throw err;
+      }
+
+      player = await db
+        .prepare(
+          `SELECT account_id
+           FROM player_latest
+           WHERE season_id = ? AND username = ?`
+        )
+        .bind(seasonId, username)
+        .first<{ account_id: string }>();
+    }
 
     // Try player_history first if we have an account_id
     let historyResults: { time: string; rating: number; position: number }[] = [];
@@ -91,21 +127,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }
     }
 
-    // Estimate game sessions and longest win streak from consecutive data points
-    let estimatedGames = 0;
-    let longestWinStreak = 0;
-    let currentStreak = 0;
-    for (let i = 1; i < historyResults.length; i++) {
-      if (historyResults[i].rating !== historyResults[i - 1].rating) {
-        estimatedGames++;
-      }
-      if (historyResults[i].rating > historyResults[i - 1].rating) {
-        currentStreak++;
-        if (currentStreak > longestWinStreak) longestWinStreak = currentStreak;
-      } else {
-        currentStreak = 0;
-      }
-    }
+    const fallbackProgress = computePlayerProgressFromHistory(historyResults);
+    const estimatedGames =
+      player?.estimated_games ?? fallbackProgress.estimatedGames;
+    const longestWinStreak =
+      player?.longest_win_streak ?? fallbackProgress.longestWinStreak;
 
     return Response.json(
       { history: historyResults, seasonStart: bounds?.start ?? null, seasonEnd: bounds?.end ?? null, estimatedGames, longestWinStreak },
