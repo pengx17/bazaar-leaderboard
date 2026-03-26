@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "22175684c7ce",
+  "session_id": "e6f38325-b7eb-4948-bde2-a1ea36c05a58",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-26T05:31:11.828732Z",
+  "branch": "chore/dump-auth-tokens",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/dump-auth-tokens.yml"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "d063c6f35c2c",
+  "token_usage": {
+    "input_tokens": 105,
+    "cache_creation_tokens": 537585,
+    "cache_read_tokens": 4924852,
+    "output_tokens": 16767,
+    "api_call_count": 71
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-26T05:31:11.367604Z",
+    "agent_lines": 28,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 28,
+    "agent_percentage": 100
+  }
+}
